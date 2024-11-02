@@ -1,0 +1,14 @@
+[package]
+name = "stm32g0-hal"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+stm32g0 = { git = "https://github.com/stm32-rs/stm32-rs-nightlies", rev = "057da0d23", features = [
+    "stm32g071",
+] }
+
+cortex-m = "0.7"
+embedded-hal = "1.0"
+fugit = "0.3"
+scopeguard = { version = "1.2", default-features = false }
