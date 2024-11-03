@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 
 use paste::paste;
 
-use crate::pac::{EXTI, GPIOA, GPIOB, GPIOC};
+use crate::pac::{EXTI, GPIOA, GPIOB, GPIOC, GPIOD};
 use crate::rcc::{Rcc, ResetEnable};
 
 #[cfg(feature = "stm32g0b1")]
@@ -401,6 +401,26 @@ gpio!(GPIOC, pc, [
     PC13: (13, Analog, afrh, AF_B_H, exticr4, exti8_15 ),
     PC14: (14, Analog, afrh, AF_B_H, exticr4, exti16_23),
     PC15: (15, Analog, afrh, AF_B_H, exticr4, exti24_31),
+]);
+
+gpio!(GPIOD, pd, [
+    // Pin: (pin, default_mode, bits...)
+    PD0:  (0,  Analog, afrl, AF_B_L, exticr1, exti0_7  ),
+    PD1:  (1,  Analog, afrl, AF_B_L, exticr1, exti8_15 ),
+    PD2:  (2,  Analog, afrl, AF_B_L, exticr1, exti16_23),
+    PD3:  (3,  Analog, afrl, AF_B_L, exticr1, exti24_31),
+    PD4:  (4,  Analog, afrl, AF_B_L, exticr2, exti0_7  ),
+    PD5:  (5,  Analog, afrl, AF_B_L, exticr2, exti8_15 ),
+    PD6:  (6,  Analog, afrl, AF_B_L, exticr2, exti16_23),
+    PD7:  (7,  Analog, afrl, AF_B_L, exticr2, exti24_31),
+    PD8:  (8,  Analog, afrh, AF_B_H, exticr3, exti0_7  ),
+    PD9:  (9,  Analog, afrh, AF_B_H, exticr3, exti8_15 ),
+    PD10: (10, Analog, afrh, AF_B_H, exticr3, exti16_23),
+    PD11: (11, Analog, afrh, AF_B_H, exticr3, exti24_31),
+    PD12: (12, Analog, afrh, AF_B_H, exticr4, exti0_7  ),
+    PD13: (13, Analog, afrh, AF_B_H, exticr4, exti8_15 ),
+    PD14: (14, Analog, afrh, AF_B_H, exticr4, exti16_23),
+    PD15: (15, Analog, afrh, AF_B_H, exticr4, exti24_31),
 ]);
 
 // GPIOE can't be used as EXTI interrupt source

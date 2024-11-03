@@ -4,12 +4,15 @@ use core::marker::PhantomData;
 use crate::gpio::gpioa::*;
 use crate::gpio::gpiob::*;
 use crate::gpio::gpioc::*;
+use crate::gpio::gpiod::*;
 use crate::gpio::Alternate;
 use crate::pac::{TIM2, TIM3};
 use crate::rcc::{Rcc, ResetEnable};
 
 #[cfg(feature = "stm32g0b1")]
 use crate::gpio::gpioe::{PE3, PE4, PE5, PE6};
+#[cfg(feature = "stm32g0b1")]
+use crate::pac::TIM4;
 
 /// Wrapper for timer peripheral.
 #[derive(Debug)]
@@ -92,7 +95,11 @@ macro_rules! general_purpose_timer {
             }
 
             pub fn counter(&self) -> $REG {
-                self.timer.cnt().read().cnt().bits()
+                #[cfg(feature = "stm32g071")]
+                return self.timer.cnt().read().cnt().bits();
+                #[cfg(feature = "stm32g0b1")]
+                // TODO: for whatever reason 16-bit TIM4 is using 32-bit TIM2 register block.
+                return self.timer.cnt().read().cnt().bits() as $REG;
             }
         }
 
@@ -115,6 +122,8 @@ macro_rules! general_purpose_timer {
 
 general_purpose_timer!(TIM2, u32);
 general_purpose_timer!(TIM3, u16);
+#[cfg(feature = "stm32g0b1")]
+general_purpose_timer!(TIM4, u16);
 
 pub struct Channel1;
 pub struct Channel2;
@@ -245,5 +254,14 @@ pwm!(TIM3, [
         Channel2 => ccr2, cc2e, ccmr1_output, oc2m, oc2pe, [(PA7, 1), (PB5, 1), (PC7, 1), (PE4, 1),],
         Channel3 => ccr3, cc3e, ccmr2_output, oc3m, oc3pe, [(PB0, 1), (PC8, 1), (PE5, 1),],
         Channel4 => ccr4, cc4e, ccmr2_output, oc4m, oc4pe, [(PB1, 1), (PC9, 1), (PE6, 1),],
+    ]
+);
+
+#[cfg(feature = "stm32g0b1")]
+pwm!(TIM4, [
+        Channel1 => ccr1, cc1e, ccmr1_output, oc1m, oc1pe, [(PB6, 9), (PD12, 2),],
+        Channel2 => ccr2, cc2e, ccmr1_output, oc2m, oc2pe, [(PB7, 9), (PD13, 2),],
+        Channel3 => ccr3, cc3e, ccmr2_output, oc3m, oc3pe, [(PB8, 9), (PD14, 2),],
+        Channel4 => ccr4, cc4e, ccmr2_output, oc4m, oc4pe, [(PB9, 9), (PD15, 2),],
     ]
 );

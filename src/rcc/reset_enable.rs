@@ -4,7 +4,7 @@ use crate::pac::{
 };
 
 #[cfg(feature = "stm32g0b1")]
-use crate::pac::GPIOE;
+use crate::pac::{GPIOE, TIM4};
 
 use super::{Rcc, ResetEnable};
 
@@ -59,6 +59,8 @@ reset_enable!(DMA1, AHB, dma1en, dma1rst); // 0
 // APB1 devices
 reset_enable!(TIM2, APB1, tim2en, tim2rst); // 0
 reset_enable!(TIM3, APB1, tim3en, tim3rst); // 1
+#[cfg(feature = "stm32g0b1")]
+reset_enable!(TIM4, APB1, tim4en, tim4rst); // 2
 reset_enable!(I2C1, APB1, i2c1en, i2c1rst); // 21
 reset_enable!(I2C2, APB1, i2c2en, i2c2rst); // 22
 reset_enable!(LPTIM2, APB1, lptim2en, lptim2rst); // 30
