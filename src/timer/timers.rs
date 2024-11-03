@@ -1,9 +1,9 @@
 #![allow(unused)]
 use core::marker::PhantomData;
 
-use crate::gpio::gpioa::{PA6, PA7};
-use crate::gpio::gpiob::{PB0, PB1, PB4, PB5};
-use crate::gpio::gpioc::{PC6, PC7, PC8, PC9};
+use crate::gpio::gpioa::*;
+use crate::gpio::gpiob::*;
+use crate::gpio::gpioc::*;
 use crate::gpio::Alternate;
 use crate::pac::{TIM2, TIM3};
 use crate::rcc::{Rcc, ResetEnable};
@@ -147,10 +147,7 @@ macro_rules! pwm {
 
                 #[allow(unsafe_code)]
                 fn set_duty_cycle(&mut self, duty: u16) -> Result<(), Self::Error> {
-                    #[cfg(feature = "stm32g071")]
-                    self.timer.$CCR().write(|w| unsafe { w.ccr().bits(duty) });
-                    #[cfg(feature = "stm32g0b1")]
-                    self.timer.$CCR().write(|w| unsafe { w.ccr().bits(duty as u32) });
+                    self.timer.$CCR().write(|w| unsafe { w.ccr().bits(duty.into()) });
 
                     Ok(())
                 }
@@ -175,6 +172,14 @@ macro_rules! pwm {
     };
 }
 
+pwm!(TIM2, [
+        Channel1 => ccr1, cc1e, ccmr1_output, oc1m, oc1pe, [(PA0, 2), (PA5, 2), (PA15, 2), (PC4, 2),],
+        Channel2 => ccr2, cc2e, ccmr1_output, oc2m, oc2pe, [(PA1, 2), (PB3, 2), (PC5, 2),],
+        Channel3 => ccr3, cc3e, ccmr2_output, oc3m, oc3pe, [(PA2, 2), (PB10, 2), (PC6, 2),],
+        Channel4 => ccr4, cc4e, ccmr2_output, oc4m, oc4pe, [(PA3, 2), (PB11, 2), (PC7, 2),],
+    ]
+);
+
 #[cfg(feature = "stm32g071")]
 pwm!(TIM3, [
         Channel1 => ccr1, cc1e, ccmr1_output, oc1m, oc1pe, [(PA6, 1), (PB4, 1), (PC6, 1),],
@@ -184,7 +189,7 @@ pwm!(TIM3, [
     ]
 );
 
-//TODO: patch for implementing Channel1 until G0B1 crate is fixed.
+//TODO: patch for implementing TIM3_CH1 until G0B1 crate is fixed.
 #[cfg(feature = "stm32g0b1")]
 macro_rules! pwm_ch1_patch {
     ($TIM:ident, [$($CH:ident => $CCR:ident, $ENBIT:ident, $CCMR:ident, $POLBIT:ident,
@@ -235,7 +240,7 @@ pwm_ch1_patch!(TIM3, [
 
 #[cfg(feature = "stm32g0b1")]
 pwm!(TIM3, [
-        // TODO: mode selection for Ch1 is broken in G0B1 crate.
+        // TODO: mode selection for TIM3_CH1 is broken in G0B1 crate.
         // Channel1 => ccr1, cc1e, ccmr1_output, oc1m, oc1pe, [(PA6, 1), (PB4, 1), (PC6, 1)],
         Channel2 => ccr2, cc2e, ccmr1_output, oc2m, oc2pe, [(PA7, 1), (PB5, 1), (PC7, 1), (PE4, 1),],
         Channel3 => ccr3, cc3e, ccmr2_output, oc3m, oc3pe, [(PB0, 1), (PC8, 1), (PE5, 1),],
