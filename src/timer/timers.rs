@@ -37,9 +37,14 @@ macro_rules! general_purpose_timer {
 
                 self.timer.psc().write(|w| w.psc().set(prescaler));
 
-                // TODO: update after switching to g0b1
                 #[allow(unsafe_code)]
+                #[cfg(feature = "stm32g071")]
                 self.timer.arr().write(|w| unsafe { w.arr().bits(limit) });
+                #[allow(unsafe_code)]
+                #[cfg(feature = "stm32g0b1")]
+                self.timer
+                    .arr()
+                    .write(|w| unsafe { w.arr().bits(limit as u32) });
 
                 Counter { timer: self.timer }
             }
@@ -51,9 +56,14 @@ macro_rules! general_purpose_timer {
                 self.timer.psc().write(|w| w.psc().set(prescaler));
                 self.timer.cr1().modify(|_, w| w.arpe().enabled());
 
-                // TODO: update after switching to g0b1
                 #[allow(unsafe_code)]
+                #[cfg(feature = "stm32g071")]
                 self.timer.arr().write(|w| unsafe { w.arr().bits(limit) });
+                #[allow(unsafe_code)]
+                #[cfg(feature = "stm32g0b1")]
+                self.timer
+                    .arr()
+                    .write(|w| unsafe { w.arr().bits(limit as u32) });
 
                 // Generate update event to copy ARR to shadow register
                 self.timer.egr().write(|w| w.ug().update());
@@ -127,12 +137,16 @@ macro_rules! pwm {
             // Implement SetDutyCycle for each channel of this timer.
             impl embedded_hal::pwm::SetDutyCycle for PwmPin<'_, $TIM, $CH> {
                 fn max_duty_cycle(&self) -> u16 {
-                    self.timer.arr().read().arr().bits()
+                    self.timer.arr().read().arr().bits() as u16
                 }
 
+                #[allow(unsafe_code)]
                 fn set_duty_cycle(&mut self, duty: u16) -> Result<(), Self::Error> {
-                    #[allow(unsafe_code)]
+                    #[cfg(feature = "stm32g071")]
                     self.timer.$CCR().write(|w| unsafe { w.ccr().bits(duty) });
+                    #[cfg(feature = "stm32g0b1")]
+                    self.timer.$CCR().write(|w| unsafe { w.ccr().bits(duty as u32) });
+
                     Ok(())
                 }
             }
@@ -156,10 +170,70 @@ macro_rules! pwm {
     };
 }
 
+#[cfg(feature = "stm32g071")]
 pwm!(TIM3, [
         Channel1 => ccr1, cc1e, ccmr1_output, oc1m, oc1pe, [(PB4, 1),],
         Channel2 => ccr2, cc2e, ccmr1_output, oc2m, oc2pe, [(PB5, 1),],
         Channel3 => ccr3, cc3e, ccmr2_output, oc3m, oc3pe, [(PB0, 1),],
         Channel4 => ccr4, cc4e, ccmr2_output, oc4m, oc4pe, [(PB1, 1),],
+    ]
+);
+
+#[cfg(feature = "stm32g0b1")]
+pwm!(TIM3, [
+        // TODO: mode selection for Ch1 is broken in G0B1 crate.
+        // Channel1 => ccr1, cc1e, ccmr1_output, oc1m, oc1pe, [(PB4, 1),],
+        Channel2 => ccr2, cc2e, ccmr1_output, oc2m, oc2pe, [(PB5, 1),],
+        Channel3 => ccr3, cc3e, ccmr2_output, oc3m, oc3pe, [(PB0, 1),],
+        Channel4 => ccr4, cc4e, ccmr2_output, oc4m, oc4pe, [(PB1, 1),],
+    ]
+);
+
+//TODO: patch for implementing Channel1 until G0B1 crate is fixed.
+#[cfg(feature = "stm32g0b1")]
+macro_rules! pwm_ch1_patch {
+    ($TIM:ident, [$($CH:ident => $CCR:ident, $ENBIT:ident, $CCMR:ident, $POLBIT:ident,
+        [$(($PIN:ident,$AF:literal),)+],)+]) => {
+        $(
+            // Implement SetDutyCycle for each channel of this timer.
+            impl embedded_hal::pwm::SetDutyCycle for PwmPin<'_, $TIM, $CH> {
+                fn max_duty_cycle(&self) -> u16 {
+                    self.timer.arr().read().arr().bits() as u16
+                }
+
+                #[allow(unsafe_code)]
+                fn set_duty_cycle(&mut self, duty: u16) -> Result<(), Self::Error> {
+                    self.timer.$CCR().write(|w| unsafe { w.ccr().bits(duty as u32) });
+
+                    Ok(())
+                }
+            }
+
+            // Implement TimerPin for each pin of each channel.
+            $(
+                impl TimerPin<$TIM> for $PIN<Alternate<$AF>> {
+                    type Channel = $CH;
+
+                    fn set_pwm_mode(&self, tim: &$TIM) {
+                        // Disable channel
+                        tim.ccer().modify(|_, w| w.$ENBIT().clear_bit());
+                        // Set PWM mode and enable preload
+                        #[allow(unsafe_code)]
+                        tim.$CCMR().modify(|_, w| unsafe {
+                            // TODO: directly set bits in mode field
+                            w.oc1m1().bits(0b110).$POLBIT().set_bit()
+                        });
+                        // Enable channel
+                        tim.ccer().modify(|_, w| w.$ENBIT().set_bit());
+                    }
+                }
+            )+
+        )+
+    };
+}
+
+#[cfg(feature = "stm32g0b1")]
+pwm_ch1_patch!(TIM3, [
+        Channel1 => ccr1, cc1e, ccmr1_output, oc1pe, [(PB4, 1),],
     ]
 );

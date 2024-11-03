@@ -20,6 +20,7 @@ jobs:
       matrix:
         target:
           - "stm32g071"
+          - "stm32g0b1"
     steps:
       - uses: actions/checkout@v4
       - name: "Install toolchain"
@@ -40,6 +41,7 @@ jobs:
       matrix:
         target:
           - "stm32g071"
+          - "stm32g0b1"
     steps:
       - uses: actions/checkout@v4
       - name: "Install toolchain"

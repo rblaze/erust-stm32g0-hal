@@ -48,7 +48,10 @@ macro_rules! reset_enable {
 }
 
 // AHB devices
+#[cfg(feature = "stm32g071")]
 reset_enable!(DMA1, AHB, dmaen, dmarst); // 0
+#[cfg(feature = "stm32g0b1")]
+reset_enable!(DMA1, AHB, dma1en, dma1rst); // 0
 
 // APB1 devices
 reset_enable!(TIM2, APB1, tim2en, tim2rst); // 0
@@ -63,8 +66,24 @@ reset_enable!(TIM1, APB2, tim1en, tim1rst); // 11
 reset_enable!(ADC, APB2, adcen, adcrst); // 20
 
 // GPIO devices
+#[cfg(feature = "stm32g071")]
 reset_enable!(GPIOA, GPIO, iopaen, ioparst); // 0
+#[cfg(feature = "stm32g071")]
 reset_enable!(GPIOB, GPIO, iopben, iopbrst); // 1
+#[cfg(feature = "stm32g071")]
 reset_enable!(GPIOC, GPIO, iopcen, iopcrst); // 2
+#[cfg(feature = "stm32g071")]
 reset_enable!(GPIOD, GPIO, iopden, iopdrst); // 3
+#[cfg(feature = "stm32g071")]
 reset_enable!(GPIOF, GPIO, iopfen, iopfrst); // 5
+
+#[cfg(feature = "stm32g0b1")]
+reset_enable!(GPIOA, GPIO, gpioaen, gpioarst); // 0
+#[cfg(feature = "stm32g0b1")]
+reset_enable!(GPIOB, GPIO, gpioben, gpiobrst); // 1
+#[cfg(feature = "stm32g0b1")]
+reset_enable!(GPIOC, GPIO, gpiocen, gpiocrst); // 2
+#[cfg(feature = "stm32g0b1")]
+reset_enable!(GPIOD, GPIO, gpioden, gpiodrst); // 3
+#[cfg(feature = "stm32g0b1")]
+reset_enable!(GPIOF, GPIO, gpiofen, gpiofrst); // 5

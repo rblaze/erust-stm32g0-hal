@@ -1,6 +1,8 @@
 #![allow(unused)]
 use core::marker::PhantomData;
 
+use paste::paste;
+
 use crate::pac::{EXTI, GPIOA, GPIOB};
 use crate::rcc::{Rcc, ResetEnable};
 
@@ -134,11 +136,12 @@ mod marker {
 }
 
 macro_rules! gpio {
-    ($GPIO:ident, $gpio:ident, $muxport:ident, [$($PXi:ident: ($pxi:ident, $default_mode:ty,
-            $idrbit:ident, $odrbit:ident, $bsbit:ident, $brbit:ident, $moderbit:ident,
-            $pupdrbit:ident, $otbit:ident, $afreg:ident, $afbit:ident, $afval:ident,
-            $muxreg:ident, $muxbits:ident, $rtbit:ident, $ftbit:ident),)+]) => {
-        pub mod $gpio {
+    ($GPIO:ident, $port:ident, [$($PXi:ident: (
+            $i:literal, $default_mode:ty,
+            $afreg:ident, $afval:ident,
+            $muxreg:ident, $muxbits:ident),)+]) => {
+    paste! {
+        pub mod [<$GPIO:lower>] {
             use super::{GpioExt, ResetEnable, Rcc, EXTI, $GPIO};
             use super::{Output, PushPull, OpenDrain};
             use super::{Input, Floating, PullUp, PullDown};
@@ -157,7 +160,7 @@ macro_rules! gpio {
 
                     Self::Parts{
                         $(
-                            $pxi: $PXi { _mode: PhantomData },
+                            [<$PXi:lower>]: $PXi { _mode: PhantomData },
                         )+
                     }
                 }
@@ -165,7 +168,7 @@ macro_rules! gpio {
 
             pub struct Parts {
                 $(
-                    pub $pxi: $PXi<$default_mode>,
+                    pub [<$PXi:lower>]: $PXi<$default_mode>,
                 )+
             }
 
@@ -178,75 +181,88 @@ macro_rules! gpio {
                 impl<MODE> $PXi<MODE> {
                     pub fn into_push_pull_output(self) -> $PXi<Output<PushPull>> {
                         let rb = unsafe { &(*$GPIO::ptr()) };
-                        rb.pupdr().modify(|_, w| w.$pupdrbit().floating());
-                        rb.otyper().modify(|_, w| w.$otbit().push_pull());
-                        rb.moder().modify(|_, w| w.$moderbit().output());
+                        rb.pupdr().modify(|_, w| w.[<pupdr $i>]().floating());
+                        rb.otyper().modify(|_, w| w.[<ot $i>]().push_pull());
+                        rb.moder().modify(|_, w| w.[<moder $i>]().output());
                         $PXi { _mode: PhantomData }
                     }
 
                     pub fn into_open_drain_output(self) -> $PXi<Output<OpenDrain>> {
                         let rb = unsafe { &(*$GPIO::ptr()) };
-                        rb.pupdr().modify(|_, w| w.$pupdrbit().floating());
-                        rb.otyper().modify(|_, w| w.$otbit().open_drain());
-                        rb.moder().modify(|_, w| w.$moderbit().output());
+                        rb.pupdr().modify(|_, w| w.[<pupdr $i>]().floating());
+                        rb.otyper().modify(|_, w| w.[<ot $i>]().open_drain());
+                        rb.moder().modify(|_, w| w.[<moder $i>]().output());
                         $PXi { _mode: PhantomData }
                     }
 
                     pub fn into_floating_input(self) -> $PXi<Input<Floating>> {
                         let rb = unsafe { &(*$GPIO::ptr()) };
-                        rb.pupdr().modify(|_, w| w.$pupdrbit().floating());
-                        rb.moder().modify(|_, w| w.$moderbit().input());
+                        rb.pupdr().modify(|_, w| w.[<pupdr $i>]().floating());
+                        rb.moder().modify(|_, w| w.[<moder $i>]().input());
                         $PXi { _mode: PhantomData }
                     }
 
                     pub fn into_pulldown_input(self) -> $PXi<Input<PullDown>> {
                         let rb = unsafe { &(*$GPIO::ptr()) };
-                        rb.pupdr().modify(|_, w| w.$pupdrbit().pull_down());
-                        rb.moder().modify(|_, w| w.$moderbit().input());
+                        rb.pupdr().modify(|_, w| w.[<pupdr $i>]().pull_down());
+                        rb.moder().modify(|_, w| w.[<moder $i>]().input());
                         $PXi { _mode: PhantomData }
                     }
 
                     pub fn into_pullup_input(self) -> $PXi<Input<PullUp>> {
                         let rb = unsafe { &(*$GPIO::ptr()) };
-                        rb.pupdr().modify(|_, w| w.$pupdrbit().pull_up());
-                        rb.moder().modify(|_, w| w.$moderbit().input());
+                        rb.pupdr().modify(|_, w| w.[<pupdr $i>]().pull_up());
+                        rb.moder().modify(|_, w| w.[<moder $i>]().input());
                         $PXi { _mode: PhantomData }
                     }
 
                     pub fn into_analog(self) -> $PXi<Analog> {
                         let rb = unsafe { &(*$GPIO::ptr()) };
-                        rb.pupdr().modify(|_, w| w.$pupdrbit().floating());
-                        rb.moder().modify(|_, w| w.$moderbit().analog());
+                        rb.pupdr().modify(|_, w| w.[<pupdr $i>]().floating());
+                        rb.moder().modify(|_, w| w.[<moder $i>]().analog());
                         $PXi { _mode: PhantomData }
                     }
 
                     pub fn into_alternate_function<const N: u8>(self) -> $PXi<Alternate<N>>
                     where Alternate<N> : AF {
                         let rb = unsafe { &(*$GPIO::ptr()) };
-                        rb.$afreg().modify(|_, w| w.$afbit().variant(<Alternate<N>>::$afval));
-                        rb.moder().modify(|_, w| w.$moderbit().alternate());
+                        rb.$afreg().modify(|_, w| w.[<afrel $i>]().variant(<Alternate<N>>::$afval));
+                        rb.moder().modify(|_, w| w.[<moder $i>]().alternate());
                         $PXi { _mode: PhantomData }
                     }
 
                     pub(crate) fn set_alternate_function_mode(&self, mode: AltFunction) {
                         let rb = unsafe { &(*$GPIO::ptr()) };
-                        rb.$afreg().modify(|_, w| w.$afbit().variant(mode.into()));
-                        rb.moder().modify(|_, w| w.$moderbit().alternate());
+                        rb.$afreg().modify(|_, w| w.[<afrel $i>]().variant(mode.into()));
+                        rb.moder().modify(|_, w| w.[<moder $i>]().alternate());
                     }
                 }
 
                 impl<MODE> $PXi<MODE> where MODE: Interruptable {
                     pub fn make_interrupt_source(&mut self, exti: &mut EXTI) {
-                        exti.$muxreg().modify(|_, w| w.$muxbits().$muxport());
+                        exti.$muxreg().modify(|_, w| w.$muxbits().$port());
                     }
 
+                    #[cfg(feature = "stm32g071")]
                     pub fn trigger_on_edge(&mut self, edge: SignalEdge, exti: &mut EXTI) {
                         match edge {
-                            SignalEdge::Rising => exti.rtsr1().modify(|_, w| w.$rtbit().enabled()),
-                            SignalEdge::Falling => exti.ftsr1().modify(|_, w| w.$ftbit().enabled()),
+                            SignalEdge::Rising => exti.rtsr1().modify(|_, w| w.[<tr $i>]().enabled()),
+                            SignalEdge::Falling => exti.ftsr1().modify(|_, w| w.[<tr $i>]().enabled()),
                             SignalEdge::Both => {
-                                exti.rtsr1().modify(|_, w| w.$rtbit().enabled());
-                                exti.ftsr1().modify(|_, w| w.$ftbit().enabled());
+                                exti.rtsr1().modify(|_, w| w.[<tr $i>]().enabled());
+                                exti.ftsr1().modify(|_, w| w.[<tr $i>]().enabled());
+                            }
+                        }
+                    }
+
+                    #[cfg(feature = "stm32g0b1")]
+                    pub fn trigger_on_edge(&mut self, edge: SignalEdge, exti: &mut EXTI) {
+                        match edge {
+                            SignalEdge::Rising => exti.rtsr1().modify(|_, w| w.[<rt $i>]().enabled()),
+                            SignalEdge::Falling => exti.ftsr1().modify(|_, w| w.[<ft $i>]().enabled()),
+                            SignalEdge::Both => {
+                                exti.rtsr1().modify(|_, w| w.[<rt $i>]().enabled());
+                                exti.ftsr1().modify(|_, w| w.[<ft $i>]().enabled());
                             }
                         }
                     }
@@ -260,7 +276,7 @@ macro_rules! gpio {
                     #[allow(unsafe_code)]
                     fn is_high(&mut self) -> Result<bool, Self::Error> {
                         let rb = unsafe { &(*$GPIO::ptr()) };
-                        Ok(rb.idr().read().$idrbit().is_high())
+                        Ok(rb.idr().read().[<idr $i>]().is_high())
                     }
 
                     fn is_low(&mut self) -> Result<bool, Self::Error> {
@@ -273,14 +289,14 @@ macro_rules! gpio {
                     fn set_high(&mut self) -> Result<(), Self::Error> {
                         unsafe {
                             let rb =  &(*$GPIO::ptr());
-                            Ok(rb.bsrr().write(|w| w.$bsbit().set_bit()))
+                            Ok(rb.bsrr().write(|w| w.[<bs $i>]().set_bit()))
                         }
                     }
 
                     fn set_low(&mut self) -> Result<(), Self::Error> {
                         unsafe {
                             let rb =  &(*$GPIO::ptr());
-                            Ok(rb.bsrr().write(|w| w.$brbit().set_bit()))
+                            Ok(rb.bsrr().write(|w| w.[<br $i>]().set_bit()))
                         }
                     }
                 }
@@ -289,7 +305,7 @@ macro_rules! gpio {
                     #[allow(unsafe_code)]
                     fn is_set_high(&mut self) -> Result<bool, Self::Error> {
                         let rb = unsafe { &(*$GPIO::ptr()) };
-                        Ok(rb.odr().read().$odrbit().is_high())
+                        Ok(rb.odr().read().[<odr $i>]().is_high())
                     }
 
                     fn is_set_low(&mut self) -> Result<bool, Self::Error> {
@@ -298,45 +314,46 @@ macro_rules! gpio {
                 }
             )+
         }
+    }
     };
 }
 
-gpio!(GPIOA, gpioa, pa, [
+gpio!(GPIOA, pa, [
     // Pin: (pin, default_mode, bits...)
-    PA0:  (pa0,  Analog, idr0,  odr0,  bs0,  br0,  moder0,  pupdr0,  ot0,  afrl,  afrel0, AF_A_L, exticr1, exti0_7,   tr0,  tr0),
-    PA1:  (pa1,  Analog, idr1,  odr1,  bs1,  br1,  moder1,  pupdr1,  ot1,  afrl,  afrel1, AF_A_L, exticr1, exti8_15,  tr1,  tr1),
-    PA2:  (pa2,  Analog, idr2,  odr2,  bs2,  br2,  moder2,  pupdr2,  ot2,  afrl,  afrel2, AF_A_L, exticr1, exti16_23, tr2,  tr2),
-    PA3:  (pa3,  Analog, idr3,  odr3,  bs3,  br3,  moder3,  pupdr3,  ot3,  afrl,  afrel3, AF_A_L, exticr1, exti24_31, tr3,  tr3),
-    PA4:  (pa4,  Analog, idr4,  odr4,  bs4,  br4,  moder4,  pupdr4,  ot4,  afrl,  afrel4, AF_A_L, exticr2, exti0_7,   tr4,  tr4),
-    PA5:  (pa5,  Analog, idr5,  odr5,  bs5,  br5,  moder5,  pupdr5,  ot5,  afrl,  afrel5, AF_A_L, exticr2, exti8_15,  tr5,  tr5),
-    PA6:  (pa6,  Analog, idr6,  odr6,  bs6,  br6,  moder6,  pupdr6,  ot6,  afrl,  afrel6, AF_A_L, exticr2, exti16_23, tr6,  tr6),
-    PA7:  (pa7,  Analog, idr7,  odr7,  bs7,  br7,  moder7,  pupdr7,  ot7,  afrl,  afrel7, AF_A_L, exticr2, exti24_31, tr7,  tr7),
-    PA8:  (pa8,  Analog, idr8,  odr8,  bs8,  br8,  moder8,  pupdr8,  ot8,  afrh,  afrel8, AF_A_H, exticr3, exti0_7,   tr8,  tr8),
-    PA9:  (pa9,  Analog, idr9,  odr9,  bs9,  br9,  moder9,  pupdr9,  ot9,  afrh,  afrel9, AF_A_H, exticr3, exti8_15,  tr9,  tr9),
-    PA10: (pa10, Analog, idr10, odr10, bs10, br10, moder10, pupdr10, ot10, afrh, afrel10, AF_A_H, exticr3, exti16_23, tr10, tr10),
-    PA11: (pa11, Analog, idr11, odr11, bs11, br11, moder11, pupdr11, ot11, afrh, afrel11, AF_A_H, exticr3, exti24_31, tr11, tr11),
-    PA12: (pa12, Analog, idr12, odr12, bs12, br12, moder12, pupdr12, ot12, afrh, afrel12, AF_A_H, exticr4, exti0_7,   tr12, tr12),
-    PA13: (pa13, Alternate<0>, idr13, odr13, bs13, br13, moder13, pupdr13, ot13, afrh, afrel13, AF_A_H, exticr4, exti8_15,  tr13, tr13),
-    PA14: (pa14, Alternate<0>, idr14, odr14, bs14, br14, moder14, pupdr14, ot14, afrh, afrel14, AF_A_H, exticr4, exti16_23, tr14, tr14),
-    PA15: (pa15, Analog, idr15, odr15, bs15, br15, moder15, pupdr15, ot15, afrh, afrel15, AF_A_H, exticr4, exti24_31, tr15, tr15),
+    PA0:  (0,  Analog, afrl, AF_A_L, exticr1, exti0_7  ),
+    PA1:  (1,  Analog, afrl, AF_A_L, exticr1, exti8_15 ),
+    PA2:  (2,  Analog, afrl, AF_A_L, exticr1, exti16_23),
+    PA3:  (3,  Analog, afrl, AF_A_L, exticr1, exti24_31),
+    PA4:  (4,  Analog, afrl, AF_A_L, exticr2, exti0_7  ),
+    PA5:  (5,  Analog, afrl, AF_A_L, exticr2, exti8_15 ),
+    PA6:  (6,  Analog, afrl, AF_A_L, exticr2, exti16_23),
+    PA7:  (7,  Analog, afrl, AF_A_L, exticr2, exti24_31),
+    PA8:  (8,  Analog, afrh, AF_A_H, exticr3, exti0_7  ),
+    PA9:  (9,  Analog, afrh, AF_A_H, exticr3, exti8_15 ),
+    PA10: (10, Analog, afrh, AF_A_H, exticr3, exti16_23),
+    PA11: (11, Analog, afrh, AF_A_H, exticr3, exti24_31),
+    PA12: (12, Analog, afrh, AF_A_H, exticr4, exti0_7  ),
+    PA13: (13, Alternate<0>, afrh, AF_A_H, exticr4, exti8_15 ),
+    PA14: (14, Alternate<0>, afrh, AF_A_H, exticr4, exti16_23),
+    PA15: (15, Analog, afrh, AF_A_H, exticr4, exti24_31),
 ]);
 
-gpio!(GPIOB, gpiob, pb, [
+gpio!(GPIOB, pb, [
     // Pin: (pin, default_mode, bits...)
-    PB0:  (pb0,  Analog, idr0,  odr0,  bs0,  br0,  moder0,  pupdr0,  ot0,  afrl,  afrel0, AF_B_L, exticr1, exti0_7,   tr0,  tr0),
-    PB1:  (pb1,  Analog, idr1,  odr1,  bs1,  br1,  moder1,  pupdr1,  ot1,  afrl,  afrel1, AF_B_L, exticr1, exti8_15,  tr1,  tr1),
-    PB2:  (pb2,  Analog, idr2,  odr2,  bs2,  br2,  moder2,  pupdr2,  ot2,  afrl,  afrel2, AF_B_L, exticr1, exti16_23, tr2,  tr2),
-    PB3:  (pb3,  Analog, idr3,  odr3,  bs3,  br3,  moder3,  pupdr3,  ot3,  afrl,  afrel3, AF_B_L, exticr1, exti24_31, tr3,  tr3),
-    PB4:  (pb4,  Analog, idr4,  odr4,  bs4,  br4,  moder4,  pupdr4,  ot4,  afrl,  afrel4, AF_B_L, exticr2, exti0_7,   tr4,  tr4),
-    PB5:  (pb5,  Analog, idr5,  odr5,  bs5,  br5,  moder5,  pupdr5,  ot5,  afrl,  afrel5, AF_B_L, exticr2, exti8_15,  tr5,  tr5),
-    PB6:  (pb6,  Analog, idr6,  odr6,  bs6,  br6,  moder6,  pupdr6,  ot6,  afrl,  afrel6, AF_B_L, exticr2, exti16_23, tr6,  tr6),
-    PB7:  (pb7,  Analog, idr7,  odr7,  bs7,  br7,  moder7,  pupdr7,  ot7,  afrl,  afrel7, AF_B_L, exticr2, exti24_31, tr7,  tr7),
-    PB8:  (pb8,  Analog, idr8,  odr8,  bs8,  br8,  moder8,  pupdr8,  ot8,  afrh,  afrel8, AF_B_H, exticr3, exti0_7,   tr8,  tr8),
-    PB9:  (pb9,  Analog, idr9,  odr9,  bs9,  br9,  moder9,  pupdr9,  ot9,  afrh,  afrel9, AF_B_H, exticr3, exti8_15,  tr9,  tr9),
-    PB10: (pb10, Analog, idr10, odr10, bs10, br10, moder10, pupdr10, ot10, afrh, afrel10, AF_B_H, exticr3, exti16_23, tr10, tr10),
-    PB11: (pb11, Analog, idr11, odr11, bs11, br11, moder11, pupdr11, ot11, afrh, afrel11, AF_B_H, exticr3, exti24_31, tr11, tr11),
-    PB12: (pb12, Analog, idr12, odr12, bs12, br12, moder12, pupdr12, ot12, afrh, afrel12, AF_B_H, exticr4, exti0_7,   tr12, tr12),
-    PB13: (pb13, Analog, idr13, odr13, bs13, br13, moder13, pupdr13, ot13, afrh, afrel13, AF_B_H, exticr4, exti8_15,  tr13, tr13),
-    PB14: (pb14, Analog, idr14, odr14, bs14, br14, moder14, pupdr14, ot14, afrh, afrel14, AF_B_H, exticr4, exti16_23, tr14, tr14),
-    PB15: (pb15, Analog, idr15, odr15, bs15, br15, moder15, pupdr15, ot15, afrh, afrel15, AF_B_H, exticr4, exti24_31, tr15, tr15),
+    PB0:  (0,  Analog, afrl, AF_B_L, exticr1, exti0_7  ),
+    PB1:  (1,  Analog, afrl, AF_B_L, exticr1, exti8_15 ),
+    PB2:  (2,  Analog, afrl, AF_B_L, exticr1, exti16_23),
+    PB3:  (3,  Analog, afrl, AF_B_L, exticr1, exti24_31),
+    PB4:  (4,  Analog, afrl, AF_B_L, exticr2, exti0_7  ),
+    PB5:  (5,  Analog, afrl, AF_B_L, exticr2, exti8_15 ),
+    PB6:  (6,  Analog, afrl, AF_B_L, exticr2, exti16_23),
+    PB7:  (7,  Analog, afrl, AF_B_L, exticr2, exti24_31),
+    PB8:  (8,  Analog, afrh, AF_B_H, exticr3, exti0_7  ),
+    PB9:  (9,  Analog, afrh, AF_B_H, exticr3, exti8_15 ),
+    PB10: (10, Analog, afrh, AF_B_H, exticr3, exti16_23),
+    PB11: (11, Analog, afrh, AF_B_H, exticr3, exti24_31),
+    PB12: (12, Analog, afrh, AF_B_H, exticr4, exti0_7  ),
+    PB13: (13, Analog, afrh, AF_B_H, exticr4, exti8_15 ),
+    PB14: (14, Analog, afrh, AF_B_H, exticr4, exti16_23),
+    PB15: (15, Analog, afrh, AF_B_H, exticr4, exti24_31),
 ]);

@@ -7,9 +7,11 @@ edition = "2021"
 stm32g0 = { git = "https://github.com/stm32-rs/stm32-rs-nightlies", rev = "057da0d23" }
 
 cortex-m = "0.7"
-embedded-hal = "1.0"
+embedded-hal = "1"
 fugit = "0.3"
-scopeguard = { version = "1.2", default-features = false }
+paste = "1"
+scopeguard = { version = "1", default-features = false }
 
 [features]
 stm32g071 = ["stm32g0/stm32g071"]
+stm32g0b1 = ["stm32g0/stm32g0b1"]
