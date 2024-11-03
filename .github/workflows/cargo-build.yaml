@@ -4,8 +4,22 @@ name: Auto build
 
 jobs:
   fmt:
-    name: "Run rustfmt and clippy"
+    name: "Run rustfmt"
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Install toolchain"
+        run: rustup toolchain install stable --profile minimal -c rustfmt
+      - name: "Check formatting in root"
+        run: cargo fmt --all --check
+
+  clippy:
+    name: "Run clippy for ${{ matrix.target }}"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - "stm32g071"
     steps:
       - uses: actions/checkout@v4
       - name: "Install toolchain"
@@ -14,16 +28,18 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install libclang-dev llvm-dev gcc-arm-none-eabi
-      - name: "Check formatting in root"
-        run: cargo fmt --all --check
       - name: "Run clippy for debug build"
-        run: cargo clippy --no-deps -- -D warnings
+        run: cargo clippy --features ${{ matrix.target }} --no-deps -- -D warnings
       - name: "Run clippy for release build"
-        run: cargo clippy --release --no-deps -- -D warnings
+        run: cargo clippy --features ${{ matrix.target }} --release --no-deps -- -D warnings
 
-  stm32g071:
-    name: "Build for STM32G071"
+  build:
+    name: "Build for ${{ matrix.target }}"
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - "stm32g071"
     steps:
       - uses: actions/checkout@v4
       - name: "Install toolchain"
@@ -33,6 +49,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install libclang-dev llvm-dev gcc-arm-none-eabi
       - name: "Debug build"
-        run: cargo build
+        run: cargo build --features ${{ matrix.target }}
       - name: "Release build"
-        run: cargo build --release
+        run: cargo build --features ${{ matrix.target }} --release
