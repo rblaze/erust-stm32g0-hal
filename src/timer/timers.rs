@@ -1,10 +1,15 @@
 #![allow(unused)]
 use core::marker::PhantomData;
 
+use crate::gpio::gpioa::{PA6, PA7};
 use crate::gpio::gpiob::{PB0, PB1, PB4, PB5};
+use crate::gpio::gpioc::{PC6, PC7, PC8, PC9};
 use crate::gpio::Alternate;
 use crate::pac::{TIM2, TIM3};
 use crate::rcc::{Rcc, ResetEnable};
+
+#[cfg(feature = "stm32g0b1")]
+use crate::gpio::gpioe::{PE3, PE4, PE5, PE6};
 
 /// Wrapper for timer peripheral.
 #[derive(Debug)]
@@ -172,20 +177,10 @@ macro_rules! pwm {
 
 #[cfg(feature = "stm32g071")]
 pwm!(TIM3, [
-        Channel1 => ccr1, cc1e, ccmr1_output, oc1m, oc1pe, [(PB4, 1),],
-        Channel2 => ccr2, cc2e, ccmr1_output, oc2m, oc2pe, [(PB5, 1),],
-        Channel3 => ccr3, cc3e, ccmr2_output, oc3m, oc3pe, [(PB0, 1),],
-        Channel4 => ccr4, cc4e, ccmr2_output, oc4m, oc4pe, [(PB1, 1),],
-    ]
-);
-
-#[cfg(feature = "stm32g0b1")]
-pwm!(TIM3, [
-        // TODO: mode selection for Ch1 is broken in G0B1 crate.
-        // Channel1 => ccr1, cc1e, ccmr1_output, oc1m, oc1pe, [(PB4, 1),],
-        Channel2 => ccr2, cc2e, ccmr1_output, oc2m, oc2pe, [(PB5, 1),],
-        Channel3 => ccr3, cc3e, ccmr2_output, oc3m, oc3pe, [(PB0, 1),],
-        Channel4 => ccr4, cc4e, ccmr2_output, oc4m, oc4pe, [(PB1, 1),],
+        Channel1 => ccr1, cc1e, ccmr1_output, oc1m, oc1pe, [(PA6, 1), (PB4, 1), (PC6, 1),],
+        Channel2 => ccr2, cc2e, ccmr1_output, oc2m, oc2pe, [(PA7, 1), (PB5, 1), (PC7, 1),],
+        Channel3 => ccr3, cc3e, ccmr2_output, oc3m, oc3pe, [(PB0, 1), (PC8, 1),],
+        Channel4 => ccr4, cc4e, ccmr2_output, oc4m, oc4pe, [(PB1, 1), (PC9, 1),],
     ]
 );
 
@@ -234,6 +229,16 @@ macro_rules! pwm_ch1_patch {
 
 #[cfg(feature = "stm32g0b1")]
 pwm_ch1_patch!(TIM3, [
-        Channel1 => ccr1, cc1e, ccmr1_output, oc1pe, [(PB4, 1),],
+        Channel1 => ccr1, cc1e, ccmr1_output, oc1pe, [(PA6, 1), (PB4, 1), (PC6, 1), (PE3, 1),],
+    ]
+);
+
+#[cfg(feature = "stm32g0b1")]
+pwm!(TIM3, [
+        // TODO: mode selection for Ch1 is broken in G0B1 crate.
+        // Channel1 => ccr1, cc1e, ccmr1_output, oc1m, oc1pe, [(PA6, 1), (PB4, 1), (PC6, 1)],
+        Channel2 => ccr2, cc2e, ccmr1_output, oc2m, oc2pe, [(PA7, 1), (PB5, 1), (PC7, 1), (PE4, 1),],
+        Channel3 => ccr3, cc3e, ccmr2_output, oc3m, oc3pe, [(PB0, 1), (PC8, 1), (PE5, 1),],
+        Channel4 => ccr4, cc4e, ccmr2_output, oc4m, oc4pe, [(PB1, 1), (PC9, 1), (PE6, 1),],
     ]
 );

@@ -3,6 +3,9 @@ use crate::pac::{
     ADC, DMA1, GPIOA, GPIOB, GPIOC, GPIOD, GPIOF, I2C1, I2C2, LPTIM1, LPTIM2, TIM1, TIM2, TIM3,
 };
 
+#[cfg(feature = "stm32g0b1")]
+use crate::pac::GPIOE;
+
 use super::{Rcc, ResetEnable};
 
 macro_rules! reset_enable_bus {
@@ -85,5 +88,7 @@ reset_enable!(GPIOB, GPIO, gpioben, gpiobrst); // 1
 reset_enable!(GPIOC, GPIO, gpiocen, gpiocrst); // 2
 #[cfg(feature = "stm32g0b1")]
 reset_enable!(GPIOD, GPIO, gpioden, gpiodrst); // 3
+#[cfg(feature = "stm32g0b1")]
+reset_enable!(GPIOE, GPIO, gpioeen, gpioerst); // 5
 #[cfg(feature = "stm32g0b1")]
 reset_enable!(GPIOF, GPIO, gpiofen, gpiofrst); // 5
