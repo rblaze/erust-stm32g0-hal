@@ -1,11 +1,16 @@
 use embedded_hal::i2c;
 use scopeguard::defer;
 
-use crate::gpio::gpioa::{PA10, PA11, PA12, PA9};
-use crate::gpio::gpiob::{PB10, PB11, PB13, PB14, PB6, PB7, PB8, PB9};
+use crate::gpio::gpioa::*;
+use crate::gpio::gpiob::*;
 use crate::gpio::{AltFunction, OpenDrain, Output};
 use crate::pac::{I2C1, I2C2};
 use crate::rcc::{Rcc, ResetEnable};
+
+#[cfg(feature = "stm32g0b1")]
+use crate::gpio::gpioc::*;
+#[cfg(feature = "stm32g0b1")]
+use crate::pac::I2C3;
 
 /// Trait for pins that can be used as I2C data
 pub trait SdaPin<I2C> {
@@ -109,11 +114,11 @@ impl<I2C> i2c::ErrorType for I2c<I2C> {
 }
 
 macro_rules! i2c {
-    ($I2C:ident, sda: [$($PSDA:ty,)+ ], scl: [$($PSCL:ty, )+ ]) => {
+    ($I2C:ident, sda: [$(($PSDA:ty, $FSDA:ident),)+ ], scl: [$(($PSCL:ty, $FSCL:ident),)+ ]) => {
         $(
             impl SclPin<$I2C> for $PSCL {
                 fn setup(&self) {
-                    self.set_alternate_function_mode(AltFunction::AF6);
+                    self.set_alternate_function_mode(AltFunction::$FSCL);
                 }
             }
         )+
@@ -121,7 +126,7 @@ macro_rules! i2c {
         $(
             impl SdaPin<$I2C> for $PSDA {
                 fn setup(&self) {
-                    self.set_alternate_function_mode(AltFunction::AF6);
+                    self.set_alternate_function_mode(AltFunction::$FSDA);
                 }
             }
         )+
@@ -379,26 +384,61 @@ macro_rules! i2c {
 
 i2c!(I2C1,
     sda: [
-        PA10<Output<OpenDrain>>,
-        PB7<Output<OpenDrain>>,
-        PB9<Output<OpenDrain>>,
+        (PA10<Output<OpenDrain>>, AF6),
+        (PB7<Output<OpenDrain>>, AF6),
+        (PB9<Output<OpenDrain>>, AF6),
     ],
     scl: [
-        PA9<Output<OpenDrain>>,
-        PB6<Output<OpenDrain>>,
-        PB8<Output<OpenDrain>>,
+        (PA9<Output<OpenDrain>>, AF6),
+        (PB6<Output<OpenDrain>>, AF6),
+        (PB8<Output<OpenDrain>>, AF6),
     ]
 );
 
+#[cfg(feature = "stm32g071")]
 i2c!(I2C2,
     sda: [
-        PA12<Output<OpenDrain>>,
-        PB11<Output<OpenDrain>>,
-        PB14<Output<OpenDrain>>,
+        (PA12<Output<OpenDrain>>, AF6),
+        (PB11<Output<OpenDrain>>, AF6),
+        (PB14<Output<OpenDrain>>, AF6),
     ],
     scl: [
-        PA11<Output<OpenDrain>>,
-        PB10<Output<OpenDrain>>,
-        PB13<Output<OpenDrain>>,
+        (PA11<Output<OpenDrain>>, AF6),
+        (PB10<Output<OpenDrain>>, AF6),
+        (PB13<Output<OpenDrain>>, AF6),
+    ]
+);
+
+#[cfg(feature = "stm32g0b1")]
+i2c!(I2C2,
+    sda: [
+        (PA6<Output<OpenDrain>>, AF8),
+        (PA10<Output<OpenDrain>>, AF8),
+        (PA12<Output<OpenDrain>>, AF6),
+        (PB4<Output<OpenDrain>>, AF8),
+        (PB11<Output<OpenDrain>>, AF6),
+        (PB14<Output<OpenDrain>>, AF6),
+    ],
+    scl: [
+        (PA7<Output<OpenDrain>>, AF8),
+        (PA9<Output<OpenDrain>>, AF8),
+        (PA11<Output<OpenDrain>>, AF6),
+        (PB3<Output<OpenDrain>>, AF8),
+        (PB10<Output<OpenDrain>>, AF6),
+        (PB13<Output<OpenDrain>>, AF6),
+    ]
+);
+
+#[cfg(feature = "stm32g0b1")]
+i2c!(I2C3,
+    sda: [
+        (PA6<Output<OpenDrain>>, AF9),
+        (PB4<Output<OpenDrain>>, AF6),
+        (PC1<Output<OpenDrain>>, AF6),
+    ],
+    scl: [
+        (PA7<Output<OpenDrain>>, AF9),
+        (PB3<Output<OpenDrain>>, AF6),
+        (PC0<Output<OpenDrain>>, AF6),
     ]
 );

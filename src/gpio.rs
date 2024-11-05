@@ -67,70 +67,14 @@ pub(crate) enum AltFunction {
     AF5 = 5,
     AF6 = 6,
     AF7 = 7,
-    // AF8 = 8,
-    // AF9 = 9,
-    // AF10 = 10,
+    AF8 = 8,
+    AF9 = 9,
+    AF10 = 10,
 }
-
-macro_rules! gpio_af {
-    ($ENUM:ty) => {
-        impl From<AltFunction> for $ENUM {
-            fn from(af: AltFunction) -> Self {
-                match af {
-                    AltFunction::AF0 => <$ENUM>::Af0,
-                    AltFunction::AF1 => <$ENUM>::Af1,
-                    AltFunction::AF2 => <$ENUM>::Af2,
-                    AltFunction::AF3 => <$ENUM>::Af3,
-                    AltFunction::AF4 => <$ENUM>::Af4,
-                    AltFunction::AF5 => <$ENUM>::Af5,
-                    AltFunction::AF6 => <$ENUM>::Af6,
-                    AltFunction::AF7 => <$ENUM>::Af7,
-                    // AltFunction::AF8 => <$ENUM>::Af8,
-                    // AltFunction::AF9 => <$ENUM>::Af9,
-                    // AltFunction::AF10 => <$ENUM>::Af10,
-                }
-            }
-        }
-    };
-}
-
-gpio_af!(crate::pac::gpioa::afrl::AFSEL0);
-gpio_af!(crate::pac::gpioa::afrh::AFSEL8);
-gpio_af!(crate::pac::gpiob::afrl::AFSEL0);
-gpio_af!(crate::pac::gpiob::afrh::AFSEL8);
 
 mod marker {
     // Marker trait for allowed alternate function values
-    pub trait AF {
-        const AF_A_L: crate::pac::gpioa::afrl::AFSEL0;
-        const AF_A_H: crate::pac::gpioa::afrh::AFSEL8;
-        const AF_B_L: crate::pac::gpiob::afrl::AFSEL0;
-        const AF_B_H: crate::pac::gpiob::afrh::AFSEL8;
-    }
-
-    macro_rules! impl_af {
-        ($N:literal, $AF:ident) => {
-            impl AF for super::Alternate<$N> {
-                const AF_A_L: crate::pac::gpioa::afrl::AFSEL0 =
-                    crate::pac::gpioa::afrl::AFSEL0::$AF;
-                const AF_A_H: crate::pac::gpioa::afrh::AFSEL8 =
-                    crate::pac::gpioa::afrh::AFSEL8::$AF;
-                const AF_B_L: crate::pac::gpiob::afrl::AFSEL0 =
-                    crate::pac::gpiob::afrl::AFSEL0::$AF;
-                const AF_B_H: crate::pac::gpiob::afrh::AFSEL8 =
-                    crate::pac::gpiob::afrh::AFSEL8::$AF;
-            }
-        };
-    }
-
-    impl_af!(0, Af0);
-    impl_af!(1, Af1);
-    impl_af!(2, Af2);
-    impl_af!(3, Af3);
-    impl_af!(4, Af4);
-    impl_af!(5, Af5);
-    impl_af!(6, Af6);
-    impl_af!(7, Af7);
+    pub trait AF {}
 
     // Marker trait for modes able to generate interrupts
     pub trait Interruptable {}
@@ -141,8 +85,7 @@ mod marker {
 
 macro_rules! gpio_common {
     ($GPIO:ident, $port:ident, [$($PXi:ident: (
-        $i:literal, $default_mode:ty,
-        $afreg:ident, $afval:ident),)+]) => {
+        $i:literal, $default_mode:ty, $afreg:ident),)+]) => {
     use paste::paste;
     paste! {
         use super::{GpioExt, ResetEnable, Rcc, EXTI, $GPIO};
@@ -229,14 +172,14 @@ macro_rules! gpio_common {
                 pub fn into_alternate_function<const N: u8>(self) -> $PXi<Alternate<N>>
                 where Alternate<N> : AF {
                     let rb = unsafe { &(*$GPIO::ptr()) };
-                    rb.$afreg().modify(|_, w| w.[<afrel $i>]().variant(<Alternate<N>>::$afval));
+                    rb.$afreg().modify(|_, w| unsafe { w.[<afrel $i>]().bits(N) });
                     rb.moder().modify(|_, w| w.[<moder $i>]().alternate());
                     $PXi { _mode: PhantomData }
                 }
 
                 pub(crate) fn set_alternate_function_mode(&self, mode: AltFunction) {
                     let rb = unsafe { &(*$GPIO::ptr()) };
-                    rb.$afreg().modify(|_, w| w.[<afrel $i>]().variant(mode.into()));
+                    rb.$afreg().modify(|_, w| unsafe { w.[<afrel $i>]().bits(mode as u8) });
                     rb.moder().modify(|_, w| w.[<moder $i>]().alternate());
                 }
             }
@@ -292,21 +235,19 @@ macro_rules! gpio_common {
 
 macro_rules! gpio {
     ($GPIO:ident, $port:ident, [$($PXi:ident: (
-            $i:literal, $default_mode:ty,
-            $afreg:ident, $afval:ident),)+]) => {
+            $i:literal, $default_mode:ty, $afreg:ident),)+]) => {
     paste! {
         pub mod [<$GPIO:lower>] {
-            gpio_common!($GPIO, $port, [$($PXi: ($i, $default_mode,$afreg, $afval),)+]);
+            gpio_common!($GPIO, $port, [$($PXi: ($i, $default_mode, $afreg),)+]);
         }
     }
     };
     ($GPIO:ident, $port:ident, [$($PXi:ident: (
-        $i:literal, $default_mode:ty,
-        $afreg:ident, $afval:ident,
+        $i:literal, $default_mode:ty, $afreg:ident,
         $muxreg:ident, $muxbits:ident),)+]) => {
     paste! {
         pub mod [<$GPIO:lower>] {
-            gpio_common!($GPIO, $port, [$($PXi: ($i, $default_mode,$afreg, $afval),)+]);
+            gpio_common!($GPIO, $port, [$($PXi: ($i, $default_mode, $afreg),)+]);
             $(
                 impl<MODE> $PXi<MODE> where MODE: Interruptable {
                     pub fn make_interrupt_source(&mut self, exti: &mut EXTI) {
@@ -345,102 +286,102 @@ macro_rules! gpio {
 
 gpio!(GPIOA, pa, [
     // Pin: (pin, default_mode, bits...)
-    PA0:  (0,  Analog, afrl, AF_A_L, exticr1, exti0_7  ),
-    PA1:  (1,  Analog, afrl, AF_A_L, exticr1, exti8_15 ),
-    PA2:  (2,  Analog, afrl, AF_A_L, exticr1, exti16_23),
-    PA3:  (3,  Analog, afrl, AF_A_L, exticr1, exti24_31),
-    PA4:  (4,  Analog, afrl, AF_A_L, exticr2, exti0_7  ),
-    PA5:  (5,  Analog, afrl, AF_A_L, exticr2, exti8_15 ),
-    PA6:  (6,  Analog, afrl, AF_A_L, exticr2, exti16_23),
-    PA7:  (7,  Analog, afrl, AF_A_L, exticr2, exti24_31),
-    PA8:  (8,  Analog, afrh, AF_A_H, exticr3, exti0_7  ),
-    PA9:  (9,  Analog, afrh, AF_A_H, exticr3, exti8_15 ),
-    PA10: (10, Analog, afrh, AF_A_H, exticr3, exti16_23),
-    PA11: (11, Analog, afrh, AF_A_H, exticr3, exti24_31),
-    PA12: (12, Analog, afrh, AF_A_H, exticr4, exti0_7  ),
-    PA13: (13, Alternate<0>, afrh, AF_A_H, exticr4, exti8_15 ),
-    PA14: (14, Alternate<0>, afrh, AF_A_H, exticr4, exti16_23),
-    PA15: (15, Analog, afrh, AF_A_H, exticr4, exti24_31),
+    PA0:  (0,  Analog, afrl, exticr1, exti0_7  ),
+    PA1:  (1,  Analog, afrl, exticr1, exti8_15 ),
+    PA2:  (2,  Analog, afrl, exticr1, exti16_23),
+    PA3:  (3,  Analog, afrl, exticr1, exti24_31),
+    PA4:  (4,  Analog, afrl, exticr2, exti0_7  ),
+    PA5:  (5,  Analog, afrl, exticr2, exti8_15 ),
+    PA6:  (6,  Analog, afrl, exticr2, exti16_23),
+    PA7:  (7,  Analog, afrl, exticr2, exti24_31),
+    PA8:  (8,  Analog, afrh, exticr3, exti0_7  ),
+    PA9:  (9,  Analog, afrh, exticr3, exti8_15 ),
+    PA10: (10, Analog, afrh, exticr3, exti16_23),
+    PA11: (11, Analog, afrh, exticr3, exti24_31),
+    PA12: (12, Analog, afrh, exticr4, exti0_7  ),
+    PA13: (13, Alternate<0>, afrh, exticr4, exti8_15 ),
+    PA14: (14, Alternate<0>, afrh, exticr4, exti16_23),
+    PA15: (15, Analog, afrh, exticr4, exti24_31),
 ]);
 
 gpio!(GPIOB, pb, [
     // Pin: (pin, default_mode, bits...)
-    PB0:  (0,  Analog, afrl, AF_B_L, exticr1, exti0_7  ),
-    PB1:  (1,  Analog, afrl, AF_B_L, exticr1, exti8_15 ),
-    PB2:  (2,  Analog, afrl, AF_B_L, exticr1, exti16_23),
-    PB3:  (3,  Analog, afrl, AF_B_L, exticr1, exti24_31),
-    PB4:  (4,  Analog, afrl, AF_B_L, exticr2, exti0_7  ),
-    PB5:  (5,  Analog, afrl, AF_B_L, exticr2, exti8_15 ),
-    PB6:  (6,  Analog, afrl, AF_B_L, exticr2, exti16_23),
-    PB7:  (7,  Analog, afrl, AF_B_L, exticr2, exti24_31),
-    PB8:  (8,  Analog, afrh, AF_B_H, exticr3, exti0_7  ),
-    PB9:  (9,  Analog, afrh, AF_B_H, exticr3, exti8_15 ),
-    PB10: (10, Analog, afrh, AF_B_H, exticr3, exti16_23),
-    PB11: (11, Analog, afrh, AF_B_H, exticr3, exti24_31),
-    PB12: (12, Analog, afrh, AF_B_H, exticr4, exti0_7  ),
-    PB13: (13, Analog, afrh, AF_B_H, exticr4, exti8_15 ),
-    PB14: (14, Analog, afrh, AF_B_H, exticr4, exti16_23),
-    PB15: (15, Analog, afrh, AF_B_H, exticr4, exti24_31),
+    PB0:  (0,  Analog, afrl, exticr1, exti0_7  ),
+    PB1:  (1,  Analog, afrl, exticr1, exti8_15 ),
+    PB2:  (2,  Analog, afrl, exticr1, exti16_23),
+    PB3:  (3,  Analog, afrl, exticr1, exti24_31),
+    PB4:  (4,  Analog, afrl, exticr2, exti0_7  ),
+    PB5:  (5,  Analog, afrl, exticr2, exti8_15 ),
+    PB6:  (6,  Analog, afrl, exticr2, exti16_23),
+    PB7:  (7,  Analog, afrl, exticr2, exti24_31),
+    PB8:  (8,  Analog, afrh, exticr3, exti0_7  ),
+    PB9:  (9,  Analog, afrh, exticr3, exti8_15 ),
+    PB10: (10, Analog, afrh, exticr3, exti16_23),
+    PB11: (11, Analog, afrh, exticr3, exti24_31),
+    PB12: (12, Analog, afrh, exticr4, exti0_7  ),
+    PB13: (13, Analog, afrh, exticr4, exti8_15 ),
+    PB14: (14, Analog, afrh, exticr4, exti16_23),
+    PB15: (15, Analog, afrh, exticr4, exti24_31),
 ]);
 
 gpio!(GPIOC, pc, [
     // Pin: (pin, default_mode, bits...)
-    PC0:  (0,  Analog, afrl, AF_B_L, exticr1, exti0_7  ),
-    PC1:  (1,  Analog, afrl, AF_B_L, exticr1, exti8_15 ),
-    PC2:  (2,  Analog, afrl, AF_B_L, exticr1, exti16_23),
-    PC3:  (3,  Analog, afrl, AF_B_L, exticr1, exti24_31),
-    PC4:  (4,  Analog, afrl, AF_B_L, exticr2, exti0_7  ),
-    PC5:  (5,  Analog, afrl, AF_B_L, exticr2, exti8_15 ),
-    PC6:  (6,  Analog, afrl, AF_B_L, exticr2, exti16_23),
-    PC7:  (7,  Analog, afrl, AF_B_L, exticr2, exti24_31),
-    PC8:  (8,  Analog, afrh, AF_B_H, exticr3, exti0_7  ),
-    PC9:  (9,  Analog, afrh, AF_B_H, exticr3, exti8_15 ),
-    PC10: (10, Analog, afrh, AF_B_H, exticr3, exti16_23),
-    PC11: (11, Analog, afrh, AF_B_H, exticr3, exti24_31),
-    PC12: (12, Analog, afrh, AF_B_H, exticr4, exti0_7  ),
-    PC13: (13, Analog, afrh, AF_B_H, exticr4, exti8_15 ),
-    PC14: (14, Analog, afrh, AF_B_H, exticr4, exti16_23),
-    PC15: (15, Analog, afrh, AF_B_H, exticr4, exti24_31),
+    PC0:  (0,  Analog, afrl, exticr1, exti0_7  ),
+    PC1:  (1,  Analog, afrl, exticr1, exti8_15 ),
+    PC2:  (2,  Analog, afrl, exticr1, exti16_23),
+    PC3:  (3,  Analog, afrl, exticr1, exti24_31),
+    PC4:  (4,  Analog, afrl, exticr2, exti0_7  ),
+    PC5:  (5,  Analog, afrl, exticr2, exti8_15 ),
+    PC6:  (6,  Analog, afrl, exticr2, exti16_23),
+    PC7:  (7,  Analog, afrl, exticr2, exti24_31),
+    PC8:  (8,  Analog, afrh, exticr3, exti0_7  ),
+    PC9:  (9,  Analog, afrh, exticr3, exti8_15 ),
+    PC10: (10, Analog, afrh, exticr3, exti16_23),
+    PC11: (11, Analog, afrh, exticr3, exti24_31),
+    PC12: (12, Analog, afrh, exticr4, exti0_7  ),
+    PC13: (13, Analog, afrh, exticr4, exti8_15 ),
+    PC14: (14, Analog, afrh, exticr4, exti16_23),
+    PC15: (15, Analog, afrh, exticr4, exti24_31),
 ]);
 
 gpio!(GPIOD, pd, [
     // Pin: (pin, default_mode, bits...)
-    PD0:  (0,  Analog, afrl, AF_B_L, exticr1, exti0_7  ),
-    PD1:  (1,  Analog, afrl, AF_B_L, exticr1, exti8_15 ),
-    PD2:  (2,  Analog, afrl, AF_B_L, exticr1, exti16_23),
-    PD3:  (3,  Analog, afrl, AF_B_L, exticr1, exti24_31),
-    PD4:  (4,  Analog, afrl, AF_B_L, exticr2, exti0_7  ),
-    PD5:  (5,  Analog, afrl, AF_B_L, exticr2, exti8_15 ),
-    PD6:  (6,  Analog, afrl, AF_B_L, exticr2, exti16_23),
-    PD7:  (7,  Analog, afrl, AF_B_L, exticr2, exti24_31),
-    PD8:  (8,  Analog, afrh, AF_B_H, exticr3, exti0_7  ),
-    PD9:  (9,  Analog, afrh, AF_B_H, exticr3, exti8_15 ),
-    PD10: (10, Analog, afrh, AF_B_H, exticr3, exti16_23),
-    PD11: (11, Analog, afrh, AF_B_H, exticr3, exti24_31),
-    PD12: (12, Analog, afrh, AF_B_H, exticr4, exti0_7  ),
-    PD13: (13, Analog, afrh, AF_B_H, exticr4, exti8_15 ),
-    PD14: (14, Analog, afrh, AF_B_H, exticr4, exti16_23),
-    PD15: (15, Analog, afrh, AF_B_H, exticr4, exti24_31),
+    PD0:  (0,  Analog, afrl, exticr1, exti0_7  ),
+    PD1:  (1,  Analog, afrl, exticr1, exti8_15 ),
+    PD2:  (2,  Analog, afrl, exticr1, exti16_23),
+    PD3:  (3,  Analog, afrl, exticr1, exti24_31),
+    PD4:  (4,  Analog, afrl, exticr2, exti0_7  ),
+    PD5:  (5,  Analog, afrl, exticr2, exti8_15 ),
+    PD6:  (6,  Analog, afrl, exticr2, exti16_23),
+    PD7:  (7,  Analog, afrl, exticr2, exti24_31),
+    PD8:  (8,  Analog, afrh, exticr3, exti0_7  ),
+    PD9:  (9,  Analog, afrh, exticr3, exti8_15 ),
+    PD10: (10, Analog, afrh, exticr3, exti16_23),
+    PD11: (11, Analog, afrh, exticr3, exti24_31),
+    PD12: (12, Analog, afrh, exticr4, exti0_7  ),
+    PD13: (13, Analog, afrh, exticr4, exti8_15 ),
+    PD14: (14, Analog, afrh, exticr4, exti16_23),
+    PD15: (15, Analog, afrh, exticr4, exti24_31),
 ]);
 
 // GPIOE can't be used as EXTI interrupt source
 #[cfg(feature = "stm32g0b1")]
 gpio!(GPIOE, pe, [
     // Pin: (pin, default_mode, bits...)
-    PE0:  (0,  Analog, afrl, AF_B_L),
-    PE1:  (1,  Analog, afrl, AF_B_L),
-    PE2:  (2,  Analog, afrl, AF_B_L),
-    PE3:  (3,  Analog, afrl, AF_B_L),
-    PE4:  (4,  Analog, afrl, AF_B_L),
-    PE5:  (5,  Analog, afrl, AF_B_L),
-    PE6:  (6,  Analog, afrl, AF_B_L),
-    PE7:  (7,  Analog, afrl, AF_B_L),
-    PE8:  (8,  Analog, afrh, AF_B_H),
-    PE9:  (9,  Analog, afrh, AF_B_H),
-    PE10: (10, Analog, afrh, AF_B_H),
-    PE11: (11, Analog, afrh, AF_B_H),
-    PE12: (12, Analog, afrh, AF_B_H),
-    PE13: (13, Analog, afrh, AF_B_H),
-    PE14: (14, Analog, afrh, AF_B_H),
-    PE15: (15, Analog, afrh, AF_B_H),
+    PE0:  (0,  Analog, afrl),
+    PE1:  (1,  Analog, afrl),
+    PE2:  (2,  Analog, afrl),
+    PE3:  (3,  Analog, afrl),
+    PE4:  (4,  Analog, afrl),
+    PE5:  (5,  Analog, afrl),
+    PE6:  (6,  Analog, afrl),
+    PE7:  (7,  Analog, afrl),
+    PE8:  (8,  Analog, afrh),
+    PE9:  (9,  Analog, afrh),
+    PE10: (10, Analog, afrh),
+    PE11: (11, Analog, afrh),
+    PE12: (12, Analog, afrh),
+    PE13: (13, Analog, afrh),
+    PE14: (14, Analog, afrh),
+    PE15: (15, Analog, afrh),
 ]);
