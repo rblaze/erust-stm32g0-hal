@@ -73,8 +73,22 @@ pub(crate) enum AltFunction {
 }
 
 mod marker {
+    use super::Alternate;
+
     // Marker trait for allowed alternate function values
     pub trait AF {}
+
+    impl AF for Alternate<0> {}
+    impl AF for Alternate<1> {}
+    impl AF for Alternate<2> {}
+    impl AF for Alternate<3> {}
+    impl AF for Alternate<4> {}
+    impl AF for Alternate<5> {}
+    impl AF for Alternate<6> {}
+    impl AF for Alternate<7> {}
+    impl AF for Alternate<8> {}
+    impl AF for Alternate<9> {}
+    impl AF for Alternate<10> {}
 
     // Marker trait for modes able to generate interrupts
     pub trait Interruptable {}
