@@ -160,7 +160,7 @@ macro_rules! low_power_timer {
                     LptimEvent::ExtTrig => w.exttrigcf().set_bit(),
                     LptimEvent::ArrMatch => w.arrmcf().set_bit(),
                     LptimEvent::CmpMatch => w.cmpmcf().set_bit(),
-                })
+                });
             }
         }
 
@@ -189,7 +189,7 @@ macro_rules! low_power_timer {
                     LptimEvent::ExtTrig => w.exttrigie().set_bit(),
                     LptimEvent::ArrMatch => w.arrmie().set_bit(),
                     LptimEvent::CmpMatch => w.cmpmie().set_bit(),
-                })
+                });
             }
 
             pub fn unlisten(&self, event: LptimEvent) {
@@ -201,7 +201,7 @@ macro_rules! low_power_timer {
                     LptimEvent::ExtTrig => w.exttrigie().clear_bit(),
                     LptimEvent::ArrMatch => w.arrmie().clear_bit(),
                     LptimEvent::CmpMatch => w.cmpmie().clear_bit(),
-                })
+                });
             }
         }
     };

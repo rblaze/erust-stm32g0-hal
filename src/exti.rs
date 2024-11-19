@@ -69,7 +69,7 @@ impl ExtiExt for EXTI {
                     .imr2()
                     .modify(|r, w| w.bits(r.bits() | (1 << (line - 32)))),
                 _ => unreachable!(),
-            }
+            };
         }
     }
 
@@ -84,7 +84,7 @@ impl ExtiExt for EXTI {
                     .imr2()
                     .modify(|r, w| w.bits(r.bits() & !(1 << (line - 32)))),
                 _ => unreachable!(),
-            }
+            };
         }
     }
 

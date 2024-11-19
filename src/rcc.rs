@@ -26,8 +26,7 @@ impl RccExt for RCC {
         let sysclk = match config.hsisys_prescaler {
             config::Prescaler::Div1 => HSI_FREQ,
             config::Prescaler::Div2 => HSI_FREQ / 2,
-            // TODO: fix when Div3 renamed to Div4
-            config::Prescaler::Div3 => HSI_FREQ / 4,
+            config::Prescaler::Div4 => HSI_FREQ / 4,
             config::Prescaler::Div8 => HSI_FREQ / 8,
             config::Prescaler::Div16 => HSI_FREQ / 16,
             config::Prescaler::Div32 => HSI_FREQ / 32,

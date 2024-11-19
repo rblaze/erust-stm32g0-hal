@@ -219,14 +219,16 @@ macro_rules! gpio_common {
                 fn set_high(&mut self) -> Result<(), Self::Error> {
                     unsafe {
                         let rb =  &(*$GPIO::ptr());
-                        Ok(rb.bsrr().write(|w| w.[<bs $i>]().set_bit()))
+                        rb.bsrr().write(|w| w.[<bs $i>]().set_bit());
+                        Ok(())
                     }
                 }
 
                 fn set_low(&mut self) -> Result<(), Self::Error> {
                     unsafe {
                         let rb =  &(*$GPIO::ptr());
-                        Ok(rb.bsrr().write(|w| w.[<br $i>]().set_bit()))
+                        rb.bsrr().write(|w| w.[<br $i>]().set_bit());
+                        Ok(())
                     }
                 }
             }
@@ -271,8 +273,12 @@ macro_rules! gpio {
                     #[cfg(feature = "stm32g071")]
                     pub fn trigger_on_edge(&mut self, edge: SignalEdge, exti: &mut EXTI) {
                         match edge {
-                            SignalEdge::Rising => exti.rtsr1().modify(|_, w| w.[<tr $i>]().enabled()),
-                            SignalEdge::Falling => exti.ftsr1().modify(|_, w| w.[<tr $i>]().enabled()),
+                            SignalEdge::Rising => {
+                                exti.rtsr1().modify(|_, w| w.[<tr $i>]().enabled());
+                            },
+                            SignalEdge::Falling => {
+                                exti.ftsr1().modify(|_, w| w.[<tr $i>]().enabled());
+                            },
                             SignalEdge::Both => {
                                 exti.rtsr1().modify(|_, w| w.[<tr $i>]().enabled());
                                 exti.ftsr1().modify(|_, w| w.[<tr $i>]().enabled());
@@ -283,8 +289,12 @@ macro_rules! gpio {
                     #[cfg(feature = "stm32g0b1")]
                     pub fn trigger_on_edge(&mut self, edge: SignalEdge, exti: &mut EXTI) {
                         match edge {
-                            SignalEdge::Rising => exti.rtsr1().modify(|_, w| w.[<rt $i>]().enabled()),
-                            SignalEdge::Falling => exti.ftsr1().modify(|_, w| w.[<ft $i>]().enabled()),
+                            SignalEdge::Rising => {
+                                exti.rtsr1().modify(|_, w| w.[<rt $i>]().enabled());
+                            },
+                            SignalEdge::Falling => {
+                                exti.ftsr1().modify(|_, w| w.[<ft $i>]().enabled());
+                            },
                             SignalEdge::Both => {
                                 exti.rtsr1().modify(|_, w| w.[<rt $i>]().enabled());
                                 exti.ftsr1().modify(|_, w| w.[<ft $i>]().enabled());
