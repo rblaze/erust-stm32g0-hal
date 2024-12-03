@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-stm32g0 = { git = "https://github.com/stm32-rs/stm32-rs-nightlies", rev = "f9d02d3" }
+stm32g0 = { git = "https://github.com/stm32-rs/stm32-rs-nightlies", rev = "878a211" }
 
 cortex-m = "0.7"
 embedded-hal = "1"
