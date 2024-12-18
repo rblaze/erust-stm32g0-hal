@@ -35,7 +35,7 @@ jobs:
         run: cargo clippy --features ${{ matrix.target }} --release --no-deps -- -D warnings
 
   build:
-    name: "Build for ${{ matrix.target }}"
+    name: "Build and test for ${{ matrix.target }}"
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -50,7 +50,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install libclang-dev llvm-dev gcc-arm-none-eabi
+      - name: "Run tests"
+        run: cargo test --features ${{ matrix.target }}
       - name: "Debug build"
-        run: cargo build --features ${{ matrix.target }}
+        run: cargo build --features ${{ matrix.target }} --target thumbv6m-none-eabi
       - name: "Release build"
-        run: cargo build --features ${{ matrix.target }} --release
+        run: cargo build --features ${{ matrix.target }} --release --target thumbv6m-none-eabi

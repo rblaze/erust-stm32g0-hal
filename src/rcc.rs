@@ -48,6 +48,13 @@ impl RccExt for RCC {
     }
 }
 
+/// Peripheral enable/disable/reset
+pub trait ResetEnable {
+    fn enable(rcc: &Rcc);
+    fn disable(rcc: &Rcc);
+    fn reset(rcc: &Rcc);
+}
+
 /// Constrained RCC peripheral
 #[derive(Debug)]
 pub struct Rcc {
@@ -56,9 +63,18 @@ pub struct Rcc {
     sysclk: KilohertzU32,
 }
 
-pub trait ResetEnable {
-    fn enable(rcc: &Rcc);
-    #[allow(unused)]
-    fn disable(rcc: &Rcc);
-    fn reset(rcc: &Rcc);
+impl Rcc {
+    /// Enable HSI48.
+    /// It is only needed when USB is active.
+    #[cfg(feature = "stm32g0b1")]
+    pub fn enable_hsi48(&self) {
+        self.rcc.cr().modify(|_, w| w.hsi48on().enabled());
+        while self.rcc.cr().read().hsi48rdy().is_not_ready() {}
+    }
+
+    /// Disable HSI48.
+    #[cfg(feature = "stm32g0b1")]
+    pub fn disable_hsi48(&self) {
+        self.rcc.cr().modify(|_, w| w.hsi48on().disabled());
+    }
 }
