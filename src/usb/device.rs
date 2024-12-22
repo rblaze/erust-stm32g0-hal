@@ -19,24 +19,29 @@ pub trait UsbExt {
     const MEMORY_SIZE: usize;
 
     /// Constrain the peripheral.
-    fn constrain<'a>(self, rcc: &'a Rcc) -> UsbBusAllocator<Bus<'a, Self>>
+    fn constrain(self, rcc: &Rcc) -> UsbBusAllocator<Bus<Self>>
     where
         Self: Sized,
-        Bus<'a, Self>: UsbBus;
+        Bus<Self>: UsbBus;
 }
 
 impl UsbExt for crate::pac::USB {
     const MEMORY_BASE: *const () = 0x4000_9800 as _;
     const MEMORY_SIZE: usize = 2048;
 
-    fn constrain<'a>(self, rcc: &'a Rcc) -> UsbBusAllocator<Bus<'a, Self>>
+    fn constrain(self, rcc: &Rcc) -> UsbBusAllocator<Bus<Self>>
     where
         Self: Sized,
-        Bus<'a, Self>: UsbBus,
+        Bus<Self>: UsbBus,
     {
+        // Enable USB clock (HSI48)
+        rcc.enable_hsi48();
+
+        // Enable USB device
+        crate::pac::USB::enable(rcc);
+
         UsbBusAllocator::new(Bus {
             usb: self,
-            rcc,
             allocator: super::buffers::Allocator::new(Self::MEMORY_SIZE),
             endpoints: Default::default(),
         })
@@ -44,18 +49,17 @@ impl UsbExt for crate::pac::USB {
 }
 
 /// Constrained USB device
-pub struct Bus<'a, USB> {
+pub struct Bus<USB> {
     usb: USB,
-    rcc: &'a Rcc,
     allocator: super::buffers::Allocator<USB>,
     endpoints: [Endpoint<USB>; MAX_ENDPOINTS],
 }
 
 #[allow(unsafe_code)]
 // TODO: ensure interrupt-safety. Expect calling poll() from interrupt handler.
-unsafe impl Sync for Bus<'_, crate::pac::USB> {}
+unsafe impl Sync for Bus<crate::pac::USB> {}
 
-impl<USB> Bus<'_, USB> {
+impl<USB> Bus<USB> {
     fn find_free_endpoint(&self) -> Result<usize> {
         for index in 0..MAX_ENDPOINTS {
             if self.endpoints[index].ep_type.is_none() {
@@ -67,7 +71,7 @@ impl<USB> Bus<'_, USB> {
 }
 
 #[allow(unsafe_code)]
-impl Bus<'_, crate::pac::USB> {
+impl Bus<crate::pac::USB> {
     fn set_statrx(&self, index: usize, state: STATRXR) {
         self.usb
             .chepr(index)
@@ -81,7 +85,7 @@ impl Bus<'_, crate::pac::USB> {
     }
 }
 
-impl UsbBus for Bus<'_, crate::pac::USB> {
+impl UsbBus for Bus<crate::pac::USB> {
     fn alloc_ep(
         &mut self,
         ep_dir: usb_device::UsbDirection,
@@ -141,12 +145,6 @@ impl UsbBus for Bus<'_, crate::pac::USB> {
     }
 
     fn enable(&mut self) {
-        // Enable USB clock (HSI48)
-        self.rcc.enable_hsi48();
-
-        // Enable USB device
-        crate::pac::USB::enable(self.rcc);
-
         // Power-on tranciever
         self.usb.cntr().modify(|_, w| w.pdwn().clear_bit());
         // TODO: RM0444 requires a delay here but datasheet doesn't specify for how long.
