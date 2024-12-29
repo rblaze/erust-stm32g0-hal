@@ -54,7 +54,7 @@ impl Adc {
 
     fn power_off(&mut self) {
         self.adc.cr().modify(|_, w| w.addis().disable());
-        while self.adc.isr().read().adrdy().is_ready() {}
+        while self.adc.cr().read().aden().is_enabled() {}
     }
 
     pub fn read<PIN>(&mut self, pin: &mut PIN) -> u16
