@@ -12,7 +12,7 @@ critical-section = "1"
 embedded-hal = "1"
 fugit = "0.3"
 paste = "1"
-rtt-target = "0.6"
+rtt-target = { version = "0.6", optional = true }
 scopeguard = { version = "1", default-features = false }
 bitfield = { version = "0.17", optional = true }
 usb-device = { version = "0.3", optional = true }
@@ -22,5 +22,6 @@ vcell = { version = "0.1", optional = true }
 critical-section = { version = "1", features = ["std"] }
 
 [features]
+usb_debug = ["dep:rtt-target"]
 stm32g071 = ["stm32g0/stm32g071"]
 stm32g0b1 = ["stm32g0/stm32g0b1", "dep:bitfield", "dep:usb-device", "dep:vcell"]

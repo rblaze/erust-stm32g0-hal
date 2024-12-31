@@ -5,6 +5,7 @@ use super::buffers::{RxBuffer, TxBuffer};
 use super::endpoint::Endpoint;
 
 use critical_section::Mutex;
+#[cfg(feature = "usb_debug")]
 use rtt_target::debug_rprintln;
 use usb_device::bus::{PollResult, UsbBus, UsbBusAllocator};
 use usb_device::endpoint::EndpointType;
@@ -56,6 +57,9 @@ pub struct Bus<USB>(Mutex<BusData<USB>>);
 impl Bus<crate::pac::USB> {
     /// Enable interrupts from USB device
     pub fn enable_interrupts(&self) {
+        #[cfg(feature = "usb_debug")]
+        debug_rprintln!("USB enable interrupts");
+
         critical_section::with(|cs| {
             self.0.borrow(cs).usb.cntr().modify(|_, w| {
                 w.ctrm()
@@ -72,6 +76,9 @@ impl Bus<crate::pac::USB> {
 
     /// Disable interrupts from USB device
     pub fn disable_interrupts(&self) {
+        #[cfg(feature = "usb_debug")]
+        debug_rprintln!("USB disable interrupts");
+
         critical_section::with(|cs| {
             self.0.borrow(cs).usb.cntr().modify(|_, w| {
                 w.ctrm()
@@ -83,6 +90,40 @@ impl Bus<crate::pac::USB> {
                     .resetm()
                     .clear_bit()
             });
+        });
+    }
+
+    /// Power-up USB peripheral
+    pub fn power_up(&self) {
+        #[cfg(feature = "usb_debug")]
+        debug_rprintln!("USB power up");
+
+        critical_section::with(|cs| {
+            let usb = &self.0.borrow(cs).usb;
+            // Power-on tranciever
+            usb.cntr().modify(|_, w| w.pdwn().clear_bit());
+            // TODO: RM0444 requires a delay here but datasheet doesn't specify for how long.
+            // STM HAL doesn't seem to have any delay.
+            cortex_m::asm::delay(500000);
+            // Clear interrupts
+            usb.istr().reset();
+            usb.cntr().modify(|_, w| w.usbrst().clear_bit());
+            // Enable pullup on DP, connect to host
+            usb.bcdr().modify(|_, w| w.dppu_dpd().set_bit());
+        });
+    }
+
+    /// Power-down USB peripheral
+    pub fn power_down(&self) {
+        #[cfg(feature = "usb_debug")]
+        debug_rprintln!("USB power down");
+
+        critical_section::with(|cs| {
+            let usb = &self.0.borrow(cs).usb;
+            // Disconnect pull-up from DP
+            usb.bcdr().modify(|_, w| w.dppu_dpd().clear_bit());
+            // Power-off tranciever
+            usb.cntr().modify(|_, w| w.pdwn().set_bit());
         });
     }
 }
@@ -102,7 +143,10 @@ impl UsbBus for Bus<crate::pac::USB> {
     }
 
     fn enable(&mut self) {
-        self.0.get_mut().enable()
+        #[cfg(feature = "usb_debug")]
+        debug_rprintln!("USB enable");
+
+        self.power_up()
     }
 
     fn reset(&self) {
@@ -188,6 +232,7 @@ impl BusData<crate::pac::USB> {
             let ep = &self.endpoints[index];
             match ep.ep_type {
                 Some(ep_type) => {
+                    #[cfg(feature = "usb_debug")]
                     debug_rprintln!(
                         "loading endpoint {} {:?} {} {}",
                         index,
@@ -195,6 +240,7 @@ impl BusData<crate::pac::USB> {
                         ep.in_buffer.is_some(),
                         ep.out_buffer.is_some()
                     );
+
                     let utype = match ep_type {
                         EndpointType::Bulk => UTYPE::Bulk,
                         EndpointType::Interrupt => UTYPE::Interrupt,
@@ -238,6 +284,7 @@ impl BusData<crate::pac::USB> {
         max_packet_size: u16,
         _interval: u8,
     ) -> Result<usb_device::endpoint::EndpointAddress> {
+        #[cfg(feature = "usb_debug")]
         debug_rprintln!(
             "alloc_ep: {:?} {:?} ({:?} {:?}) {:?} {:?}",
             ep_dir,
@@ -247,6 +294,7 @@ impl BusData<crate::pac::USB> {
             ep_type,
             max_packet_size
         );
+
         // Find an endpoint with a given index or create a new one.
         let index = if let Some(addr) = ep_addr {
             // Adding second direction to the existing endpoint
@@ -297,22 +345,10 @@ impl BusData<crate::pac::USB> {
         ))
     }
 
-    fn enable(&mut self) {
-        debug_rprintln!("USB enable");
-        // Power-on tranciever
-        self.usb.cntr().modify(|_, w| w.pdwn().clear_bit());
-        // TODO: RM0444 requires a delay here but datasheet doesn't specify for how long.
-        // STM HAL doesn't seem to have any delay.
-        cortex_m::asm::delay(500000);
-        // Clear interrupts
-        self.usb.istr().reset();
-        self.usb.cntr().modify(|_, w| w.usbrst().clear_bit());
-        // Enable pullup on DP, connect to host
-        self.usb.bcdr().modify(|_, w| w.dppu_dpd().set_bit());
-    }
-
     fn reset(&self) {
+        #[cfg(feature = "usb_debug")]
         debug_rprintln!("USB reset");
+
         // Reset device
         self.usb.daddr().reset();
         self.usb.cntr().modify(|_, w| w.usbrst().reset());
@@ -329,14 +365,18 @@ impl BusData<crate::pac::USB> {
 
     #[allow(unsafe_code)]
     fn set_device_address(&self, addr: u8) {
+        #[cfg(feature = "usb_debug")]
         debug_rprintln!("set_device_address: {}", addr);
+
         unsafe {
             self.usb.daddr().modify(|_, w| w.add().bits(addr));
         }
     }
 
     fn write(&self, ep_addr: usb_device::endpoint::EndpointAddress, buf: &[u8]) -> Result<usize> {
+        #[cfg(feature = "usb_debug")]
         debug_rprintln!("USB write {:?} {} {:?}", ep_addr, buf.len(), buf);
+
         if !ep_addr.is_in() {
             return Err(UsbError::InvalidEndpoint);
         }
@@ -384,16 +424,20 @@ impl BusData<crate::pac::USB> {
         self.usb.chepr(index).modify(|_, w| w.vtrx().clear());
         self.set_statrx(index, STATRXR::Valid);
 
+        #[cfg(feature = "usb_debug")]
         if let Ok(size) = result {
             debug_rprintln!("read data: req {}, got {:?}", buf.len(), &buf[..size]);
         } else {
             debug_rprintln!("read data: req {}, got {:?}", buf.len(), result);
         }
+
         result
     }
 
     fn set_stalled(&self, ep_addr: usb_device::endpoint::EndpointAddress, stalled: bool) {
+        #[cfg(feature = "usb_debug")]
         debug_rprintln!("set_stalled: {:?} {}", ep_addr, stalled);
+
         let index = ep_addr.index();
 
         match ep_addr.direction() {
@@ -438,13 +482,17 @@ impl BusData<crate::pac::USB> {
     }
 
     fn suspend(&self) {
+        #[cfg(feature = "usb_debug")]
         debug_rprintln!("USB suspend");
+
         self.usb.cntr().modify(|_, w| w.suspen().suspend());
         while self.usb.cntr().read().susprdy().bit_is_clear() {}
     }
 
     fn resume(&self) {
+        #[cfg(feature = "usb_debug")]
         debug_rprintln!("USB resume");
+
         // Shouldn't be necessary: per RM, this bit is cleared by hardware
         // simultaneous with the WAKEUP flag set.
         self.usb.cntr().modify(|_, w| w.suspen().clear_bit());
@@ -455,15 +503,24 @@ impl BusData<crate::pac::USB> {
 
         if istr.wkup().is_wakeup() {
             self.usb.istr().write(|w| w.wkup().clear().susp().clear());
+
+            #[cfg(feature = "usb_debug")]
             debug_rprintln!("resume");
+
             PollResult::Resume
         } else if istr.rst_dcon().is_reset() {
             self.usb.istr().write(|w| w.rst_dcon().clear());
+
+            #[cfg(feature = "usb_debug")]
             debug_rprintln!("reset");
+
             PollResult::Reset
         } else if istr.susp().is_suspend() {
             self.usb.istr().write(|w| w.susp().clear());
+
+            #[cfg(feature = "usb_debug")]
             debug_rprintln!("suspend");
+
             PollResult::Suspend
         } else if istr.ctr().is_completed() {
             let mut ep_out = 0;
@@ -487,27 +544,33 @@ impl BusData<crate::pac::USB> {
                 }
             }
 
+            #[cfg(feature = "usb_debug")]
             debug_rprintln!(
                 "data: rx {:b} tx {:b} setup {:b}",
                 ep_out,
                 ep_in_complete,
                 ep_setup
             );
+
             PollResult::Data {
                 ep_out,
                 ep_in_complete,
                 ep_setup,
             }
         } else {
+            #[cfg(feature = "usb_debug")]
+            debug_rprintln!("nothing happened, {:?}", istr);
+
             PollResult::None
         }
     }
 
     fn force_reset(&self) -> Result<()> {
+        #[cfg(feature = "usb_debug")]
         debug_rprintln!("force_reset");
+
         // Disconnect pull-up from DP
         self.usb.bcdr().modify(|_, w| w.dppu_dpd().clear_bit());
-        // TODO: add sleep here?
         // Reconnect the pull-up resistor to DP
         self.usb.bcdr().modify(|_, w| w.dppu_dpd().set_bit());
         Ok(())
