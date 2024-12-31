@@ -4,17 +4,21 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# stm32g0 = { git = "https://github.com/stm32-rs/stm32-rs-nightlies", rev = "37e5253" }
-stm32g0 = { path = "../stm32-rs/stm32g0" }
+stm32g0 = { git = "https://github.com/stm32-rs/stm32-rs-nightlies", rev = "6103c50" }
+# stm32g0 = { path = "../stm32-rs/stm32g0" }
 
 cortex-m = "0.7"
 embedded-hal = "1"
 fugit = "0.3"
 paste = "1"
+rtt-target = "0.6"
 scopeguard = { version = "1", default-features = false }
 bitfield = { version = "0.17", optional = true }
 usb-device = { version = "0.3", optional = true }
 vcell = { version = "0.1", optional = true }
+
+[dev-dependencies]
+critical-section = { version = "1", features = ["std"] }
 
 [features]
 stm32g071 = ["stm32g0/stm32g071"]

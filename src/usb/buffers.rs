@@ -8,16 +8,16 @@ use usb_device::{Result, UsbError};
 use vcell::VolatileCell;
 
 /// Packet memory word size
-const WORD_SIZE: usize = core::mem::size_of::<u16>();
+const WORD_SIZE: usize = core::mem::size_of::<u32>();
 /// Buffer descriptors size per endpoint
 const BTABLE_ENTRY_SIZE: usize = core::mem::size_of::<TxEntry>() + core::mem::size_of::<RxEntry>();
 
 /// USB rx/tx buffer allocator
 pub(super) struct Allocator<USB> {
-    /// Total available memory in u16 words
-    total_words: usize,
-    /// Next free u16 word
-    next_free_word: usize,
+    /// Total available memory
+    total_bytes: usize,
+    /// Next available memory offset
+    next_free_byte: usize,
     marker: PhantomData<USB>,
 }
 
@@ -26,30 +26,30 @@ impl<USB> Allocator<USB> {
         // First `MAX_ENDPOINTS * 8` bytes are reserved for buffer descriptor table.
         // The remaining memory is available for buffers.
         Self {
-            total_words: packet_memory_bytes / WORD_SIZE,
-            next_free_word: MAX_ENDPOINTS * BTABLE_ENTRY_SIZE / WORD_SIZE,
+            total_bytes: packet_memory_bytes,
+            next_free_byte: MAX_ENDPOINTS * BTABLE_ENTRY_SIZE,
             marker: PhantomData,
         }
     }
 
     /// Allocates buffer. Returns the buffer offset or error.
-    pub fn alloc(&mut self, num_words: usize) -> Result<usize> {
-        if self.next_free_word + num_words > self.total_words {
+    pub fn alloc(&mut self, num_bytes: usize) -> Result<usize> {
+        // Precondition: buffers always start at 4-byte boundary.
+        debug_assert!(self.next_free_byte % 4 == 0);
+
+        if self.next_free_byte + num_bytes > self.total_bytes {
             return Err(UsbError::EndpointMemoryOverflow);
         }
 
-        let offset = self.next_free_word;
-        self.next_free_word += num_words;
-
-        // Allocations must start at 4-byte boundary.
-        self.next_free_word = self.next_free_word.next_multiple_of(4 / WORD_SIZE);
+        let offset = self.next_free_byte;
+        self.next_free_byte += num_bytes.next_multiple_of(4);
 
         Ok(offset)
     }
 }
 
 pub(super) struct TxBuffer<USB> {
-    mem: &'static [VolatileCell<u16>],
+    mem: &'static [VolatileCell<u32>],
     tx_entry: &'static VolatileCell<TxEntry>,
     marker: PhantomData<USB>,
 }
@@ -86,16 +86,21 @@ impl<USB> TxBuffer<USB> {
         let btable = packet_memory as *const VolatileCell<TxEntry>;
         let btable_entry = btable.wrapping_add(index * 2);
 
-        let buffer_memory = packet_memory as *const VolatileCell<u16>;
+        let buffer_memory = packet_memory as *const VolatileCell<u32>;
         let buffer_words = num_bytes.div_ceil(WORD_SIZE);
-        let buffer_offset = allocator.alloc(buffer_words)?;
+        let buffer_offset = allocator.alloc(num_bytes)?;
+        // Buffers must be word-aligned
+        debug_assert!(buffer_offset % WORD_SIZE == 0);
 
         let tx_entry = unsafe { &(*btable_entry) };
         tx_entry.set(TxEntry::new(buffer_offset));
 
         Ok(Self {
             mem: unsafe {
-                core::slice::from_raw_parts(buffer_memory.wrapping_add(buffer_offset), buffer_words)
+                core::slice::from_raw_parts(
+                    buffer_memory.wrapping_add(buffer_offset / WORD_SIZE),
+                    buffer_words,
+                )
             },
             tx_entry,
             marker: PhantomData,
@@ -114,13 +119,15 @@ impl<USB> TxBuffer<USB> {
         let remainder = chunks.remainder();
 
         for chunk in chunks {
-            let word = u16::from_ne_bytes(chunk.try_into().unwrap());
+            let word = u32::from_ne_bytes(chunk.try_into().unwrap());
             self.mem[index].set(word);
             index += 1;
         }
 
         if !remainder.is_empty() {
-            let word = u16::from_ne_bytes([remainder[0], 0]);
+            let mut word_bytes = [0u8; WORD_SIZE];
+            word_bytes[..remainder.len()].copy_from_slice(remainder);
+            let word = u32::from_ne_bytes(word_bytes);
             self.mem[index].set(word);
         }
 
@@ -143,7 +150,7 @@ impl<USB> TxBuffer<USB> {
 }
 
 pub(super) struct RxBuffer<USB> {
-    mem: &'static [VolatileCell<u16>],
+    mem: &'static [VolatileCell<u32>],
     rx_entry: &'static VolatileCell<RxEntry>,
     marker: PhantomData<USB>,
 }
@@ -193,16 +200,21 @@ impl<USB> RxBuffer<USB> {
             alloc_blocks * 2
         };
 
-        let buffer_memory = packet_memory as *const VolatileCell<u16>;
-        let buffer_words = alloc_bytes / WORD_SIZE;
-        let buffer_offset = allocator.alloc(buffer_words)?;
+        let buffer_memory = packet_memory as *const VolatileCell<u32>;
+        let buffer_words = alloc_bytes.div_ceil(WORD_SIZE);
+        let buffer_offset = allocator.alloc(alloc_bytes)?;
+        // Buffers must be word-aligned
+        debug_assert!(buffer_offset % WORD_SIZE == 0);
 
         let rx_entry = unsafe { &(*btable_entry) };
         rx_entry.set(RxEntry::new(buffer_offset, block_size, alloc_blocks));
 
         Ok(Self {
             mem: unsafe {
-                core::slice::from_raw_parts(buffer_memory.wrapping_add(buffer_offset), buffer_words)
+                core::slice::from_raw_parts(
+                    buffer_memory.wrapping_add(buffer_offset / WORD_SIZE),
+                    buffer_words,
+                )
             },
             rx_entry,
             marker: PhantomData,
@@ -219,15 +231,25 @@ impl<USB> RxBuffer<USB> {
         }
 
         for index in 0..bytes_read / WORD_SIZE {
-            // Buffers are safe (and required) to read as u16
-            let [b1, b2] = self.mem[index].get().to_ne_bytes();
-            data[index * 2] = b1;
-            data[index * 2 + 1] = b2;
+            // Buffers are safe to read as u32
+            let [b1, b2, b3, b4] = self.mem[index].get().to_ne_bytes();
+            data[index * 4] = b1;
+            data[index * 4 + 1] = b2;
+            data[index * 4 + 2] = b3;
+            data[index * 4 + 3] = b4;
         }
 
-        if bytes_read % WORD_SIZE != 0 {
-            let [b1, _] = self.mem[bytes_read / WORD_SIZE].get().to_ne_bytes();
-            data[bytes_read - 1] = b1;
+        let remainder = bytes_read % WORD_SIZE;
+        if remainder != 0 {
+            // Still safe to read the whole word.
+            let [b1, b2, b3, _] = self.mem[bytes_read / WORD_SIZE].get().to_ne_bytes();
+            data[bytes_read - remainder] = b1;
+            if remainder > 1 {
+                data[bytes_read - remainder + 1] = b2;
+            }
+            if remainder > 2 {
+                data[bytes_read - remainder + 2] = b3;
+            }
         }
 
         Ok(bytes_read)
@@ -248,20 +270,20 @@ impl<USB> RxBuffer<USB> {
 mod test {
     use super::*;
 
-    const BTABLE_WORDS: usize = MAX_ENDPOINTS * BTABLE_ENTRY_SIZE / WORD_SIZE;
+    const BTABLE_SIZE: usize = MAX_ENDPOINTS * BTABLE_ENTRY_SIZE;
 
     #[test]
     fn test_allocations() {
         let mut allocator = Allocator::<()>::new(2048);
 
         let buffer1 = allocator.alloc(5);
-        assert_eq!(buffer1, Ok(BTABLE_WORDS));
+        assert_eq!(buffer1, Ok(BTABLE_SIZE));
 
         let buffer2 = allocator.alloc(470);
-        assert_eq!(buffer2, Ok(BTABLE_WORDS + 6));
+        assert_eq!(buffer2, Ok(BTABLE_SIZE + 8));
 
         let buffer3 = allocator.alloc(30);
-        assert_eq!(buffer3, Ok(BTABLE_WORDS + 476));
+        assert_eq!(buffer3, Ok(BTABLE_SIZE + 480));
     }
 
     #[test]
@@ -269,23 +291,23 @@ mod test {
         let mut allocator = Allocator::<()>::new(2048);
 
         // Buffer descriptor table takes 64 bytes, allocations another 1512 bytes.
-        // 2048 - 64 - 1024 - 512 = 448, third allocation shouldn't fit.
+        // 2048 - 64 - 1000 - 504 = 480, third allocation shouldn't fit.
         allocator
-            .alloc(500)
+            .alloc(1000)
             .expect("allocation unexpectedly failed");
         allocator
-            .alloc(255)
+            .alloc(501)
             .expect("allocation unexpectedly failed");
 
-        let alloc_result = allocator.alloc(237);
+        let alloc_result = allocator.alloc(481);
         assert_eq!(
             alloc_result,
             Err(UsbError::EndpointMemoryOverflow),
             "allocation didn't overflow"
         );
 
-        let buffer = allocator.alloc(236);
-        assert_eq!(buffer, Ok(BTABLE_WORDS + 500 + 256));
+        let buffer = allocator.alloc(480);
+        assert_eq!(buffer, Ok(BTABLE_SIZE + 1000 + 504));
     }
 
     #[test]
@@ -298,12 +320,12 @@ mod test {
 
         let buffer1 = TxBuffer::new(&mut allocator, 0, 5, packet_memory).unwrap();
         assert_eq!(buffer1.as_ptr(), alloc_start);
-        assert_eq!(buffer1.len_in_bytes(), 6);
+        assert_eq!(buffer1.len_in_bytes(), 8);
         assert_eq!(buffer1.tx_entry as *const _, btable_start);
 
         let buffer2 = TxBuffer::new(&mut allocator, 2, 470, packet_memory).unwrap();
         assert_eq!(buffer2.as_ptr(), alloc_start.wrapping_byte_add(8));
-        assert_eq!(buffer2.len_in_bytes(), 470);
+        assert_eq!(buffer2.len_in_bytes(), 472);
         assert_eq!(buffer2.tx_entry as *const _, btable_start.wrapping_add(4));
 
         let buffer3 = TxBuffer::new(&mut allocator, 1, 59, packet_memory).unwrap();
@@ -359,7 +381,7 @@ mod test {
         // 5 bytes are rounded up to 6
         let buffer1 = RxBuffer::new(&mut allocator, 0, 5, packet_memory).unwrap();
         assert_eq!(buffer1.as_ptr(), alloc_start);
-        assert_eq!(buffer1.len_in_bytes(), 6);
+        assert_eq!(buffer1.len_in_bytes(), 8);
         assert_eq!(
             buffer1.rx_entry as *const _,
             btable_start.wrapping_add(1) as *const _
@@ -377,7 +399,7 @@ mod test {
         // Largest buffer we can allocate in 2-byte blocks is 62 bytes.
         let buffer3 = RxBuffer::new(&mut allocator, 1, 62, packet_memory).unwrap();
         assert_eq!(buffer3.as_ptr(), alloc_start.wrapping_byte_add(8 + 480));
-        assert_eq!(buffer3.len_in_bytes(), 62);
+        assert_eq!(buffer3.len_in_bytes(), 64);
         assert_eq!(
             buffer3.rx_entry as *const _,
             btable_start.wrapping_add(3) as *const _

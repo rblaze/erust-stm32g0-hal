@@ -4,6 +4,7 @@ use crate::rcc::{Rcc, ResetEnable};
 use super::buffers::{RxBuffer, TxBuffer};
 use super::endpoint::Endpoint;
 
+use rtt_target::debug_rprintln;
 use usb_device::bus::{PollResult, UsbBus, UsbBusAllocator};
 use usb_device::endpoint::EndpointType;
 use usb_device::{Result, UsbDirection, UsbError};
@@ -61,7 +62,8 @@ unsafe impl Sync for Bus<crate::pac::USB> {}
 
 impl<USB> Bus<USB> {
     fn find_free_endpoint(&self) -> Result<usize> {
-        for index in 0..MAX_ENDPOINTS {
+        // Do not allocate endpoint 0, it's reserved for control transfers.
+        for index in 1..MAX_ENDPOINTS {
             if self.endpoints[index].ep_type.is_none() {
                 return Ok(index);
             }
@@ -83,6 +85,53 @@ impl Bus<crate::pac::USB> {
             .chepr(index)
             .modify(|r, w| unsafe { w.stattx().bits(r.stattx().bits() ^ state as u8) });
     }
+
+    fn reload_endpoints(&self) {
+        for index in 0..MAX_ENDPOINTS {
+            let ep = &self.endpoints[index];
+            match ep.ep_type {
+                Some(ep_type) => {
+                    debug_rprintln!(
+                        "loading endpoint {} {:?} {} {}",
+                        index,
+                        ep_type,
+                        ep.in_buffer.is_some(),
+                        ep.out_buffer.is_some()
+                    );
+                    let utype = match ep_type {
+                        EndpointType::Bulk => UTYPE::Bulk,
+                        EndpointType::Interrupt => UTYPE::Interrupt,
+                        EndpointType::Isochronous { .. } => UTYPE::Iso,
+                        EndpointType::Control => UTYPE::Control,
+                    };
+
+                    #[allow(unsafe_code)]
+                    self.usb
+                        .chepr(index)
+                        .write(|w| unsafe { w.ea().bits(index as u8).utype().variant(utype) });
+
+                    let rxtarget = if ep.out_buffer.is_some() {
+                        STATRXR::Valid
+                    } else {
+                        STATRXR::Disabled
+                    };
+
+                    let txtarget = if ep.in_buffer.is_some() {
+                        STATTXR::Nak
+                    } else {
+                        STATTXR::Disabled
+                    };
+
+                    self.set_statrx(index, rxtarget);
+                    self.set_stattx(index, txtarget);
+                }
+                None => {
+                    // No endpoint
+                    self.usb.chepr(index).reset();
+                }
+            }
+        }
+    }
 }
 
 impl UsbBus for Bus<crate::pac::USB> {
@@ -94,6 +143,15 @@ impl UsbBus for Bus<crate::pac::USB> {
         max_packet_size: u16,
         _interval: u8,
     ) -> Result<usb_device::endpoint::EndpointAddress> {
+        debug_rprintln!(
+            "alloc_ep: {:?} {:?} ({:?} {:?}) {:?} {:?}",
+            ep_dir,
+            ep_addr,
+            ep_addr.map(|a| a.direction()),
+            ep_addr.map(|a| a.index()),
+            ep_type,
+            max_packet_size
+        );
         // Find an endpoint with a given index or create a new one.
         let index = if let Some(addr) = ep_addr {
             // Adding second direction to the existing endpoint
@@ -101,7 +159,7 @@ impl UsbBus for Bus<crate::pac::USB> {
             let ep = self.endpoints.get(index).ok_or(UsbError::InvalidEndpoint)?;
 
             // Endpoint must have the same type.
-            if ep.ep_type != Some(ep_type) {
+            if ep.ep_type.is_some_and(|t| t != ep_type) {
                 return Err(UsbError::InvalidEndpoint);
             };
 
@@ -145,73 +203,50 @@ impl UsbBus for Bus<crate::pac::USB> {
     }
 
     fn enable(&mut self) {
+        debug_rprintln!("USB enable");
         // Power-on tranciever
         self.usb.cntr().modify(|_, w| w.pdwn().clear_bit());
         // TODO: RM0444 requires a delay here but datasheet doesn't specify for how long.
         // STM HAL doesn't seem to have any delay.
-        // TODO: set interrupt masks
+        cortex_m::asm::delay(500000);
         // Clear interrupts
         self.usb.istr().reset();
+        self.usb.cntr().modify(|_, w| w.usbrst().clear_bit());
         // Enable pullup on DP, connect to host
         self.usb.bcdr().modify(|_, w| w.dppu_dpd().set_bit());
     }
 
     fn reset(&self) {
-        // Reload endpoints
-        for index in 0..MAX_ENDPOINTS {
-            let ep = &self.endpoints[index];
-            match ep.ep_type {
-                Some(ep_type) => {
-                    let utype = match ep_type {
-                        EndpointType::Bulk => UTYPE::Bulk,
-                        EndpointType::Interrupt => UTYPE::Interrupt,
-                        EndpointType::Isochronous { .. } => UTYPE::Iso,
-                        EndpointType::Control => UTYPE::Control,
-                    };
-
-                    #[allow(unsafe_code)]
-                    self.usb
-                        .chepr(index)
-                        .write(|w| unsafe { w.ea().bits(index as u8).utype().variant(utype) });
-
-                    let rxtarget = if ep.out_buffer.is_some() {
-                        STATRXR::Valid
-                    } else {
-                        STATRXR::Disabled
-                    };
-
-                    let txtarget = if ep.in_buffer.is_some() {
-                        STATTXR::Nak
-                    } else {
-                        STATTXR::Disabled
-                    };
-
-                    self.set_statrx(index, rxtarget);
-                    self.set_stattx(index, txtarget);
-                }
-                None => {
-                    // No endpoint
-                    self.usb.chepr(index).reset();
-                }
-            }
-        }
+        debug_rprintln!("USB reset");
         // Reset device
+        self.usb.daddr().reset();
         self.usb.cntr().modify(|_, w| w.usbrst().reset());
         self.usb.cntr().modify(|_, w| w.usbrst().clear_bit());
+
+        self.reload_endpoints();
+
         // Clear interrupts
-        self.usb.istr().reset();
+        #[allow(unsafe_code)]
+        self.usb.istr().write(|w| unsafe { w.bits(0) });
+
+        self.usb.daddr().write(|w| w.ef().set_bit());
     }
 
     #[allow(unsafe_code)]
     fn set_device_address(&self, addr: u8) {
+        debug_rprintln!("set_device_address: {}", addr);
         unsafe {
-            self.usb
-                .daddr()
-                .modify(|_, w| w.add().bits(addr).ef().set_bit());
+            self.usb.daddr().modify(|_, w| w.add().bits(addr));
         }
     }
 
     fn write(&self, ep_addr: usb_device::endpoint::EndpointAddress, buf: &[u8]) -> Result<usize> {
+        debug_rprintln!(
+            "USB write {:?} {} {:?}",
+            ep_addr,
+            buf.len(),
+            buf
+        );
         if !ep_addr.is_in() {
             return Err(UsbError::InvalidEndpoint);
         }
@@ -256,13 +291,23 @@ impl UsbBus for Bus<crate::pac::USB> {
         let result = self.endpoints[index].read(buf);
 
         // Ready or not, prepare endpoint for the next transfer.
-        self.usb.chepr(index).modify(|_, w| w.vtrx().clear_bit());
+        self.usb.chepr(index).modify(|_, w| w.vtrx().clear());
         self.set_statrx(index, STATRXR::Valid);
 
+        if let Ok(size) = result {
+            debug_rprintln!("read data: req {}, got {:?}", buf.len(), &buf[..size]);
+        } else {
+            debug_rprintln!("read data: req {}, got {:?}", buf.len(), result);
+        }
         result
     }
 
     fn set_stalled(&self, ep_addr: usb_device::endpoint::EndpointAddress, stalled: bool) {
+        debug_rprintln!(
+            "set_stalled: {:?} {}",
+            ep_addr,
+            stalled
+        );
         let index = ep_addr.index();
 
         match ep_addr.direction() {
@@ -307,11 +352,13 @@ impl UsbBus for Bus<crate::pac::USB> {
     }
 
     fn suspend(&self) {
+        debug_rprintln!("USB suspend");
         self.usb.cntr().modify(|_, w| w.suspen().suspend());
         while self.usb.cntr().read().susprdy().bit_is_clear() {}
     }
 
     fn resume(&self) {
+        debug_rprintln!("USB resume");
         // Shouldn't be necessary: per RM, this bit is cleared by hardware
         // simultaneous with the WAKEUP flag set.
         self.usb.cntr().modify(|_, w| w.suspen().clear_bit());
@@ -321,13 +368,16 @@ impl UsbBus for Bus<crate::pac::USB> {
         let istr = self.usb.istr().read();
 
         if istr.wkup().is_wakeup() {
-            self.usb.istr().write(|w| w.wkup().clear());
+            self.usb.istr().write(|w| w.wkup().clear().susp().clear());
+            debug_rprintln!("resume");
             PollResult::Resume
         } else if istr.rst_dcon().is_reset() {
             self.usb.istr().write(|w| w.rst_dcon().clear());
+            debug_rprintln!("reset");
             PollResult::Reset
         } else if istr.susp().is_suspend() {
             self.usb.istr().write(|w| w.susp().clear());
+            debug_rprintln!("suspend");
             PollResult::Suspend
         } else if istr.ctr().is_completed() {
             let mut ep_out = 0;
@@ -335,15 +385,15 @@ impl UsbBus for Bus<crate::pac::USB> {
             let mut ep_setup = 0;
 
             for index in 0..MAX_ENDPOINTS {
-                let stat = self.usb.chepr(index).read();
+                let chepr = self.usb.chepr(index).read();
 
-                if stat.vttx().bit_is_set() {
+                if chepr.vttx().bit_is_set() {
                     ep_in_complete |= 1 << index;
-                    self.usb.chepr(index).modify(|_, w| w.vttx().clear_bit());
+                    self.usb.chepr(index).modify(|_, w| w.vttx().clear());
                 }
 
-                if stat.vtrx().bit_is_set() {
-                    if stat.setup().bit_is_set() {
+                if chepr.vtrx().bit_is_set() {
+                    if chepr.setup().bit_is_set() {
                         ep_setup |= 1 << index;
                     } else {
                         ep_out |= 1 << index;
@@ -351,6 +401,12 @@ impl UsbBus for Bus<crate::pac::USB> {
                 }
             }
 
+            debug_rprintln!(
+                "data: rx {:b} tx {:b} setup {:b}",
+                ep_out,
+                ep_in_complete,
+                ep_setup
+            );
             PollResult::Data {
                 ep_out,
                 ep_in_complete,
@@ -362,6 +418,7 @@ impl UsbBus for Bus<crate::pac::USB> {
     }
 
     fn force_reset(&self) -> Result<()> {
+        debug_rprintln!("force_reset");
         // Disconnect pull-up from DP
         self.usb.bcdr().modify(|_, w| w.dppu_dpd().clear_bit());
         // TODO: add sleep here?
