@@ -54,6 +54,9 @@ pub(super) struct TxBuffer<USB> {
     marker: PhantomData<USB>,
 }
 
+#[allow(unsafe_code)]
+unsafe impl<USB> Send for TxBuffer<USB> {}
+
 impl<USB> Debug for TxBuffer<USB> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("TxBuffer")
@@ -154,6 +157,9 @@ pub(super) struct RxBuffer<USB> {
     rx_entry: &'static VolatileCell<RxEntry>,
     marker: PhantomData<USB>,
 }
+
+#[allow(unsafe_code)]
+unsafe impl<USB> Send for RxBuffer<USB> {}
 
 impl<USB> Debug for RxBuffer<USB> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

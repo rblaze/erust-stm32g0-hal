@@ -8,6 +8,7 @@ stm32g0 = { git = "https://github.com/stm32-rs/stm32-rs-nightlies", rev = "6103c
 # stm32g0 = { path = "../stm32-rs/stm32g0" }
 
 cortex-m = "0.7"
+critical-section = "1"
 embedded-hal = "1"
 fugit = "0.3"
 paste = "1"

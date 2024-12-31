@@ -4,6 +4,7 @@ use crate::rcc::{Rcc, ResetEnable};
 use super::buffers::{RxBuffer, TxBuffer};
 use super::endpoint::Endpoint;
 
+use critical_section::Mutex;
 use rtt_target::debug_rprintln;
 use usb_device::bus::{PollResult, UsbBus, UsbBusAllocator};
 use usb_device::endpoint::EndpointType;
@@ -41,26 +42,87 @@ impl UsbExt for crate::pac::USB {
         // Enable USB device
         crate::pac::USB::enable(rcc);
 
-        UsbBusAllocator::new(Bus {
+        UsbBusAllocator::new(Bus(Mutex::new(BusData {
             usb: self,
-            allocator: super::buffers::Allocator::new(Self::MEMORY_SIZE),
             endpoints: Default::default(),
-        })
+            allocator: super::buffers::Allocator::new(Self::MEMORY_SIZE),
+        })))
     }
 }
 
 /// Constrained USB device
-pub struct Bus<USB> {
-    usb: USB,
-    allocator: super::buffers::Allocator<USB>,
-    endpoints: [Endpoint<USB>; MAX_ENDPOINTS],
+pub struct Bus<USB>(Mutex<BusData<USB>>);
+
+impl UsbBus for Bus<crate::pac::USB> {
+    fn alloc_ep(
+        &mut self,
+        ep_dir: UsbDirection,
+        ep_addr: Option<usb_device::endpoint::EndpointAddress>,
+        ep_type: EndpointType,
+        max_packet_size: u16,
+        interval: u8,
+    ) -> Result<usb_device::endpoint::EndpointAddress> {
+        self.0
+            .get_mut()
+            .alloc_ep(ep_dir, ep_addr, ep_type, max_packet_size, interval)
+    }
+
+    fn enable(&mut self) {
+        self.0.get_mut().enable()
+    }
+
+    fn reset(&self) {
+        critical_section::with(|cs| self.0.borrow(cs).reset())
+    }
+
+    fn set_device_address(&self, addr: u8) {
+        critical_section::with(|cs| self.0.borrow(cs).set_device_address(addr))
+    }
+
+    fn write(&self, ep_addr: usb_device::endpoint::EndpointAddress, buf: &[u8]) -> Result<usize> {
+        critical_section::with(|cs| self.0.borrow(cs).write(ep_addr, buf))
+    }
+
+    fn read(
+        &self,
+        ep_addr: usb_device::endpoint::EndpointAddress,
+        buf: &mut [u8],
+    ) -> Result<usize> {
+        critical_section::with(|cs| self.0.borrow(cs).read(ep_addr, buf))
+    }
+
+    fn set_stalled(&self, ep_addr: usb_device::endpoint::EndpointAddress, stalled: bool) {
+        critical_section::with(|cs| self.0.borrow(cs).set_stalled(ep_addr, stalled))
+    }
+
+    fn is_stalled(&self, ep_addr: usb_device::endpoint::EndpointAddress) -> bool {
+        critical_section::with(|cs| self.0.borrow(cs).is_stalled(ep_addr))
+    }
+
+    fn suspend(&self) {
+        critical_section::with(|cs| self.0.borrow(cs).suspend())
+    }
+
+    fn resume(&self) {
+        critical_section::with(|cs| self.0.borrow(cs).resume())
+    }
+
+    fn poll(&self) -> PollResult {
+        critical_section::with(|cs| self.0.borrow(cs).poll())
+    }
+
+    fn force_reset(&self) -> Result<()> {
+        critical_section::with(|cs| self.0.borrow(cs).force_reset())
+    }
 }
 
-#[allow(unsafe_code)]
-// TODO: ensure interrupt-safety. Expect calling poll() from interrupt handler.
-unsafe impl Sync for Bus<crate::pac::USB> {}
+struct BusData<USB> {
+    usb: USB,
+    endpoints: [Endpoint<USB>; MAX_ENDPOINTS],
+    allocator: super::buffers::Allocator<USB>,
+}
 
-impl<USB> Bus<USB> {
+impl<USB> BusData<USB> {
     fn find_free_endpoint(&self) -> Result<usize> {
         // Do not allocate endpoint 0, it's reserved for control transfers.
         for index in 1..MAX_ENDPOINTS {
@@ -73,7 +135,7 @@ impl<USB> Bus<USB> {
 }
 
 #[allow(unsafe_code)]
-impl Bus<crate::pac::USB> {
+impl BusData<crate::pac::USB> {
     fn set_statrx(&self, index: usize, state: STATRXR) {
         self.usb
             .chepr(index)
@@ -132,9 +194,7 @@ impl Bus<crate::pac::USB> {
             }
         }
     }
-}
 
-impl UsbBus for Bus<crate::pac::USB> {
     fn alloc_ep(
         &mut self,
         ep_dir: usb_device::UsbDirection,
@@ -241,12 +301,7 @@ impl UsbBus for Bus<crate::pac::USB> {
     }
 
     fn write(&self, ep_addr: usb_device::endpoint::EndpointAddress, buf: &[u8]) -> Result<usize> {
-        debug_rprintln!(
-            "USB write {:?} {} {:?}",
-            ep_addr,
-            buf.len(),
-            buf
-        );
+        debug_rprintln!("USB write {:?} {} {:?}", ep_addr, buf.len(), buf);
         if !ep_addr.is_in() {
             return Err(UsbError::InvalidEndpoint);
         }
@@ -303,11 +358,7 @@ impl UsbBus for Bus<crate::pac::USB> {
     }
 
     fn set_stalled(&self, ep_addr: usb_device::endpoint::EndpointAddress, stalled: bool) {
-        debug_rprintln!(
-            "set_stalled: {:?} {}",
-            ep_addr,
-            stalled
-        );
+        debug_rprintln!("set_stalled: {:?} {}", ep_addr, stalled);
         let index = ep_addr.index();
 
         match ep_addr.direction() {
