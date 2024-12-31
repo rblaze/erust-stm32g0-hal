@@ -53,6 +53,40 @@ impl UsbExt for crate::pac::USB {
 /// Constrained USB device
 pub struct Bus<USB>(Mutex<BusData<USB>>);
 
+impl Bus<crate::pac::USB> {
+    /// Enable interrupts from USB device
+    pub fn enable_interrupts(&self) {
+        critical_section::with(|cs| {
+            self.0.borrow(cs).usb.cntr().modify(|_, w| {
+                w.ctrm()
+                    .set_bit()
+                    .wkupm()
+                    .set_bit()
+                    .suspm()
+                    .set_bit()
+                    .resetm()
+                    .set_bit()
+            });
+        });
+    }
+
+    /// Disable interrupts from USB device
+    pub fn disable_interrupts(&self) {
+        critical_section::with(|cs| {
+            self.0.borrow(cs).usb.cntr().modify(|_, w| {
+                w.ctrm()
+                    .clear_bit()
+                    .wkupm()
+                    .clear_bit()
+                    .suspm()
+                    .clear_bit()
+                    .resetm()
+                    .clear_bit()
+            });
+        });
+    }
+}
+
 impl UsbBus for Bus<crate::pac::USB> {
     fn alloc_ep(
         &mut self,
@@ -134,14 +168,15 @@ impl<USB> BusData<USB> {
     }
 }
 
-#[allow(unsafe_code)]
 impl BusData<crate::pac::USB> {
+    #[allow(unsafe_code)]
     fn set_statrx(&self, index: usize, state: STATRXR) {
         self.usb
             .chepr(index)
             .modify(|r, w| unsafe { w.statrx().bits(r.statrx().bits() ^ state as u8) });
     }
 
+    #[allow(unsafe_code)]
     fn set_stattx(&self, index: usize, state: STATTXR) {
         self.usb
             .chepr(index)
