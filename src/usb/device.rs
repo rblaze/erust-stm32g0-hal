@@ -8,7 +8,7 @@ use critical_section::Mutex;
 #[cfg(feature = "usb_debug")]
 use rtt_target::debug_rprintln;
 use usb_device::bus::{PollResult, UsbBus, UsbBusAllocator};
-use usb_device::endpoint::EndpointType;
+use usb_device::endpoint::{EndpointOut, EndpointType};
 use usb_device::{Result, UsbDirection, UsbError};
 
 /// Maximum number of endpoints per device.
@@ -126,6 +126,10 @@ impl Bus<crate::pac::USB> {
             usb.cntr().modify(|_, w| w.pdwn().set_bit());
         });
     }
+
+    pub fn set_out_nack(&self, ep: &EndpointOut<'_, Self>, out_nack: bool) {
+        critical_section::with(|cs| self.0.borrow(cs).set_out_nack(ep.address(), out_nack))
+    }
 }
 
 impl UsbBus for Bus<crate::pac::USB> {
@@ -225,6 +229,27 @@ impl BusData<crate::pac::USB> {
         self.usb
             .chepr(index)
             .modify(|r, w| unsafe { w.stattx().bits(r.stattx().bits() ^ state as u8) });
+    }
+
+    fn set_out_nack(&self, ep_addr: usb_device::endpoint::EndpointAddress, out_nack: bool) {
+        #[cfg(feature = "usb_debug")]
+        debug_rprintln!("set_nack: {:?} {}", ep_addr, out_nack);
+        debug_assert_eq!(ep_addr.direction(), UsbDirection::Out);
+
+        let index = ep_addr.index();
+
+        if self.endpoints[index].out_nack.get() == out_nack {
+            // No change in mode, do nothing.
+            return;
+        }
+
+        self.endpoints[index].out_nack.set(out_nack);
+
+        // When switching from NACK to normal, unblock the endpoint.
+        // Otherwise, do nothing: next read() will keep NACK mode.
+        if self.usb.chepr(index).read().statrx().is_nak() && !out_nack {
+            self.set_statrx(index, STATRXR::Valid);
+        }
     }
 
     fn reload_endpoints(&self) {
@@ -422,13 +447,20 @@ impl BusData<crate::pac::USB> {
 
         // Ready or not, prepare endpoint for the next transfer.
         self.usb.chepr(index).modify(|_, w| w.vtrx().clear());
-        self.set_statrx(index, STATRXR::Valid);
+        if !self.endpoints[index].out_nack.get() {
+            self.set_statrx(index, STATRXR::Valid);
+        }
 
         #[cfg(feature = "usb_debug")]
         if let Ok(size) = result {
-            debug_rprintln!("read data: req {}, got {:?}", buf.len(), &buf[..size]);
+            debug_rprintln!(
+                "USB read {:?} req {}, got {:?}",
+                ep_addr,
+                buf.len(),
+                &buf[..size]
+            );
         } else {
-            debug_rprintln!("read data: req {}, got {:?}", buf.len(), result);
+            debug_rprintln!("USB read {:?} req {}, got {:?}", ep_addr, buf.len(), result);
         }
 
         result

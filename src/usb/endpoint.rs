@@ -1,3 +1,5 @@
+use core::cell::Cell;
+
 use super::buffers::{RxBuffer, TxBuffer};
 
 use usb_device::endpoint::EndpointType;
@@ -11,6 +13,7 @@ pub(super) struct Endpoint<USB> {
     pub in_buffer: Option<TxBuffer<USB>>,
     /// Endpoint type for allocated endpoints, None for unallocated.
     pub ep_type: Option<EndpointType>,
+    pub out_nack: Cell<bool>,
 }
 
 // Can't derive Default because it requires USB to be Default too.
@@ -20,6 +23,7 @@ impl<USB> Default for Endpoint<USB> {
             out_buffer: None,
             in_buffer: None,
             ep_type: None,
+            out_nack: Cell::new(false),
         }
     }
 }
