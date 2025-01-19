@@ -7,7 +7,7 @@ use super::endpoint::Endpoint;
 use critical_section::Mutex;
 #[cfg(feature = "usb_debug")]
 use rtt_target::debug_rprintln;
-use usb_device::bus::{PollResult, UsbBus, UsbBusAllocator};
+use usb_device::bus::{PollResult, UsbBus};
 use usb_device::endpoint::{EndpointOut, EndpointType};
 use usb_device::{Result, UsbDirection, UsbError};
 
@@ -22,7 +22,7 @@ pub trait UsbExt {
     const MEMORY_SIZE: usize;
 
     /// Constrain the peripheral.
-    fn constrain(self, rcc: &Rcc) -> UsbBusAllocator<Bus<Self>>
+    fn constrain(self, rcc: &Rcc) -> Bus<Self>
     where
         Self: Sized,
         Bus<Self>: UsbBus;
@@ -32,7 +32,7 @@ impl UsbExt for crate::pac::USB {
     const MEMORY_BASE: *const () = 0x4000_9800 as _;
     const MEMORY_SIZE: usize = 2048;
 
-    fn constrain(self, rcc: &Rcc) -> UsbBusAllocator<Bus<Self>>
+    fn constrain(self, rcc: &Rcc) -> Bus<Self>
     where
         Self: Sized,
         Bus<Self>: UsbBus,
@@ -43,11 +43,11 @@ impl UsbExt for crate::pac::USB {
         // Enable USB device
         crate::pac::USB::enable(rcc);
 
-        UsbBusAllocator::new(Bus(Mutex::new(BusData {
+        Bus(Mutex::new(BusData {
             usb: self,
             endpoints: Default::default(),
             allocator: super::buffers::Allocator::new(Self::MEMORY_SIZE),
-        })))
+        }))
     }
 }
 
