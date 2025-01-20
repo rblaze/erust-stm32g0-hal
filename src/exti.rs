@@ -3,8 +3,6 @@
 use crate::gpio::SignalEdge;
 use crate::pac::EXTI;
 
-// TODO: conditionally enable events by MCU model
-
 /// EXTI trigger event
 #[derive(Debug, Eq, PartialEq, PartialOrd, Clone, Copy)]
 pub enum Event {
@@ -28,10 +26,13 @@ pub enum Event {
     Comp1 = 17,
     Comp2 = 18,
     Rtc = 19,
+    #[cfg(feature = "stm32g0b1")]
     Comp3 = 20,
     Tamp = 21,
+    #[cfg(feature = "stm32g0b1")]
     I2c2 = 22,
     I2c1 = 23,
+    #[cfg(feature = "stm32g0b1")]
     Usart3 = 24,
     Usart1 = 25,
     Usart2 = 26,
@@ -42,8 +43,12 @@ pub enum Event {
     LseCss = 31,
     Ucpd1 = 32,
     Ucpd2 = 33,
+    #[cfg(feature = "stm32g0b1")]
     Vddio2 = 34,
+    #[cfg(feature = "stm32g0b1")]
     LpUart2 = 35,
+    #[cfg(feature = "stm32g0b1")]
+    Usb = 36,
 }
 
 /// Extension trait for EXTI
@@ -65,7 +70,7 @@ impl ExtiExt for EXTI {
         unsafe {
             match line {
                 0..=31 => self.imr1().modify(|r, w| w.bits(r.bits() | (1 << line))),
-                32..=35 => self
+                32..=36 => self
                     .imr2()
                     .modify(|r, w| w.bits(r.bits() | (1 << (line - 32)))),
                 _ => unreachable!(),
@@ -80,7 +85,7 @@ impl ExtiExt for EXTI {
         unsafe {
             match line {
                 0..=31 => self.imr1().modify(|r, w| w.bits(r.bits() & !(1 << line))),
-                32..=35 => self
+                32..=36 => self
                     .imr2()
                     .modify(|r, w| w.bits(r.bits() & !(1 << (line - 32)))),
                 _ => unreachable!(),
@@ -100,14 +105,15 @@ impl ExtiExt for EXTI {
                         || self.fpr1().read().bits() & (1 << line) != 0
                 }
             },
-            // 32..=35 => match edge {
-            //     SignalEdge::Rising => self.rpr2.read().bits() & (1 << (line - 32)) != 0,
-            //     SignalEdge::Falling => self.fpr2.read().bits() & (1 << (line - 32)) != 0,
-            //     SignalEdge::Both => {
-            //         self.rpr2.read().bits() & (1 << (line - 32)) != 0
-            //             || self.fpr2.read().bits() & (1 << (line - 32)) != 0
-            //     }
-            // },
+            #[cfg(feature = "stm32g0b1")]
+            32..=36 => match edge {
+                SignalEdge::Rising => self.rpr2().read().bits() & (1 << (line - 32)) != 0,
+                SignalEdge::Falling => self.fpr2().read().bits() & (1 << (line - 32)) != 0,
+                SignalEdge::Both => {
+                    self.rpr2().read().bits() & (1 << (line - 32)) != 0
+                        || self.fpr2().read().bits() & (1 << (line - 32)) != 0
+                }
+            },
             _ => false,
         }
     }
@@ -121,9 +127,10 @@ impl ExtiExt for EXTI {
                     self.rpr1().modify(|_, w| w.bits(1 << line));
                     self.fpr1().modify(|_, w| w.bits(1 << line));
                 }
+                #[cfg(feature = "stm32g0b1")]
                 34 => {
-                    // self.rpr2.modify(|_, w| w.bits(1 << (line - 32)));
-                    // self.fpr2.modify(|_, w| w.bits(1 << (line - 32)));
+                    self.rpr2().modify(|_, w| w.bits(1 << (line - 32)));
+                    self.fpr2().modify(|_, w| w.bits(1 << (line - 32)));
                 }
                 _ => unreachable!(),
             }

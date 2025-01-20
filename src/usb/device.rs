@@ -102,7 +102,7 @@ impl Bus<crate::pac::USB> {
             let usb = &self.0.borrow(cs).usb;
             // Power-on tranciever
             usb.cntr().modify(|_, w| w.pdwn().clear_bit());
-            // TODO: RM0444 requires a delay here but datasheet doesn't specify for how long.
+            // RM0444 requires a delay here but datasheet doesn't specify for how long.
             // STM HAL doesn't seem to have any delay.
             cortex_m::asm::delay(500000);
             // Clear interrupts
@@ -127,8 +127,10 @@ impl Bus<crate::pac::USB> {
         });
     }
 
-    pub fn set_out_nack(&self, ep: &EndpointOut<'_, Self>, out_nack: bool) {
-        critical_section::with(|cs| self.0.borrow(cs).set_out_nack(ep.address(), out_nack))
+    /// Sets paused state of OUT endpoint.
+    /// When paused, OUT endpoint stays in the NACK state after receiving the packet.
+    pub fn set_paused(&self, ep: &EndpointOut<'_, Self>, paused: bool) {
+        critical_section::with(|cs| self.0.borrow(cs).set_paused(ep.address(), paused))
     }
 }
 
@@ -231,9 +233,9 @@ impl BusData<crate::pac::USB> {
             .modify(|r, w| unsafe { w.stattx().bits(r.stattx().bits() ^ state as u8) });
     }
 
-    fn set_out_nack(&self, ep_addr: usb_device::endpoint::EndpointAddress, out_nack: bool) {
+    fn set_paused(&self, ep_addr: usb_device::endpoint::EndpointAddress, out_nack: bool) {
         #[cfg(feature = "usb_debug")]
-        debug_rprintln!("set_nack: {:?} {}", ep_addr, out_nack);
+        debug_rprintln!("set_pausedk: {:?} {}", ep_addr, out_nack);
         debug_assert_eq!(ep_addr.direction(), UsbDirection::Out);
 
         let index = ep_addr.index();
