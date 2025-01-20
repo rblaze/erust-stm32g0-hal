@@ -5,6 +5,12 @@ use crate::pac::{LPTIM1, LPTIM2};
 use crate::rcc::lptim::{LptimClock, LptimClockExt};
 use crate::rcc::{Rcc, ResetEnable};
 
+pub trait LptimExt {
+    fn constrain(self) -> LowPowerTimer<Self>
+    where
+        Self: Sized;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LptimPrescaler {
     Div1 = 0b000,
@@ -50,11 +56,13 @@ pub struct LptimCounter<TIM, STATE> {
 
 macro_rules! low_power_timer {
     ($TIM:ident) => {
-        impl LowPowerTimer<$TIM> {
-            pub fn new(timer: $TIM) -> Self {
-                Self { timer }
+        impl LptimExt for $TIM {
+            fn constrain(self) -> LowPowerTimer<Self> {
+                LowPowerTimer { timer: self }
             }
+        }
 
+        impl LowPowerTimer<$TIM> {
             pub fn upcounter(
                 self,
                 clock: LptimClock,

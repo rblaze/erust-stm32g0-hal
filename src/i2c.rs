@@ -68,7 +68,7 @@ impl Config {
 
 /// Extension trait to create I2C bus from a raw device
 pub trait I2cExt<I2C> {
-    fn i2c<SDA, SCL>(self, sda: SDA, scl: SCL, config: &Config, rcc: &Rcc) -> I2c<I2C>
+    fn constrain<SDA, SCL>(self, sda: SDA, scl: SCL, config: &Config, rcc: &Rcc) -> I2c<I2C>
     where
         SDA: SdaPin<I2C>,
         SCL: SclPin<I2C>;
@@ -132,7 +132,7 @@ macro_rules! i2c {
         )+
 
         impl I2cExt<$I2C> for $I2C {
-            fn i2c<SDA, SCL>(self, sda: SDA, scl: SCL, config: &Config, rcc: &Rcc) -> I2c<$I2C>
+            fn constrain<SDA, SCL>(self, sda: SDA, scl: SCL, config: &Config, rcc: &Rcc) -> I2c<$I2C>
             where
                 SDA: SdaPin<$I2C>,
                 SCL: SclPin<$I2C>,

@@ -1,11 +1,6 @@
 #![no_std]
 #![deny(unsafe_code)]
 
-// TODO: cleanup HAL modules
-// 1. use constrain() for creating peripherals via extension traits
-// 2. except for GPIO, which is canonically split()
-// 3. and except for timers, which can be turned into counter, pwm, etc
-
 pub mod adc;
 pub mod exti;
 pub mod gpio;

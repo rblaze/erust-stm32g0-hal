@@ -4,18 +4,22 @@ use crate::pac::adc::chselr1;
 use crate::pac::ADC;
 use crate::rcc::{Rcc, ResetEnable};
 
+pub trait AdcExt {
+    fn constrain(self, rcc: &Rcc) -> Adc;
+}
+
 pub struct Adc {
     adc: ADC,
     vref_cache: Option<u16>,
 }
 
-impl Adc {
-    pub fn new(adc: ADC, rcc: &Rcc) -> Self {
+impl AdcExt for ADC {
+    fn constrain(self, rcc: &Rcc) -> Adc {
         ADC::enable(rcc);
         ADC::reset(rcc);
 
         // Enable ADC voltage regulator.
-        adc.cr().modify(|_, w| w.advregen().enabled());
+        self.cr().modify(|_, w| w.advregen().enabled());
 
         // RM0444 15.3.3 Calibration can only be initiated when the ADC voltage regulator is
         // enabled (ADVREGEN = 1 and tADCVREG_SETUP has elapsed) and the ADC is disabled
@@ -24,18 +28,20 @@ impl Adc {
         // Round up for a safety margin.
         cortex_m::asm::delay(2000);
 
-        adc.cfgr1().modify(|_, w| w.chselrmod().sequence());
+        self.cfgr1().modify(|_, w| w.chselrmod().sequence());
 
         // Set clock to PCLK/2.
         // TODO: make this configurable.
-        adc.cfgr2().modify(|_, w| w.ckmode().pclk_div2());
+        self.cfgr2().modify(|_, w| w.ckmode().pclk_div2());
 
-        Self {
-            adc,
+        Adc {
+            adc: self,
             vref_cache: None,
         }
     }
+}
 
+impl Adc {
     pub fn calibrate(&mut self) {
         self.adc.isr().write(|w| w.eocal().clear());
         self.adc.cr().modify(|_, w| w.adcal().start_calibration());

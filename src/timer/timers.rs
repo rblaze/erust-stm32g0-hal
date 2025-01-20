@@ -14,6 +14,12 @@ use crate::gpio::gpioe::{PE3, PE4, PE5, PE6};
 #[cfg(feature = "stm32g0b1")]
 use crate::pac::TIM4;
 
+pub trait TimerExt {
+    fn constrain(self) -> Timer<Self>
+    where
+        Self: Sized;
+}
+
 /// Wrapper for timer peripheral.
 #[derive(Debug)]
 pub struct Timer<TIM> {
@@ -34,11 +40,13 @@ pub struct Pwm<TIM> {
 
 macro_rules! general_purpose_timer {
     ($TIM:ident, $REG:tt) => {
-        impl Timer<$TIM> {
-            pub fn new(timer: $TIM) -> Self {
-                Self { timer }
+        impl TimerExt for $TIM {
+            fn constrain(self) -> Timer<Self> {
+                Timer { timer: self }
             }
+        }
 
+        impl Timer<$TIM> {
             pub fn upcounter(self, prescaler: u16, limit: $REG, rcc: &Rcc) -> Counter<$TIM> {
                 $TIM::enable(rcc);
                 $TIM::reset(rcc);
