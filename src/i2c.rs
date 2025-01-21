@@ -1,5 +1,4 @@
 use embedded_hal::i2c;
-use scopeguard::defer;
 
 use crate::gpio::gpioa::*;
 use crate::gpio::gpiob::*;
@@ -151,24 +150,31 @@ macro_rules! i2c {
                 });
 
                 self.timingr().modify(|_, w| config.write_timings(w));
+                self.cr1().modify(|_, w| w.pe().enabled());
 
                 I2c::<$I2C>::new(self)
             }
         }
 
-        #[allow(unused)]
         impl I2c<$I2C> {
             fn new(i2c: $I2C) -> Self {
                 Self { i2c }
+            }
+
+            pub fn reset(&self) {
+                self.i2c.cr1().modify(|_, w| w.pe().disabled());
+                // When cleared, PE must be kept low for at least three APB clock cycles.
+                cortex_m::asm::delay(100);
+                self.i2c.cr1().modify(|_, w| w.pe().enabled());
             }
 
             // TODO: this code probably doesn't handle "reload" transfers
             // (Read/Read and Write/Write op pairs) correctly.
             fn check_errors(
                 &self,
-                status: &super::pac::i2c1::isr::R,
                 transfer_kind: i2c::NoAcknowledgeSource,
             ) -> Result<(), Error> {
+                let status = self.i2c.isr().read();
                 if status.ovr().is_overrun() {
                     self.i2c.icr().write(|w| w.ovrcf().clear());
                     return Err(Error::Overrun);
@@ -185,18 +191,6 @@ macro_rules! i2c {
                     self.i2c.icr().write(|w| w.nackcf().clear());
                     return Err(Error::Nack(transfer_kind));
                 }
-                if status.stopf().is_stop() {
-                    self.i2c.icr().write(|w| w.stopcf().clear());
-                    return Err(Error::IncorrectFrameSize);
-                }
-                // If this condition is not handled earlier, then it's an error.
-                if status.tc().is_complete()
-                    || status.tcr().is_complete()
-                    || status.txis().is_empty()
-                    || status.rxne().is_not_empty()
-                {
-                    return Err(Error::IncorrectFrameSize);
-                }
 
                 Ok(())
             }
@@ -207,20 +201,20 @@ macro_rules! i2c {
                 state: TransferState,
             ) -> Result<(), Error> {
                 loop {
-                    let status = self.i2c.isr().read();
                     match state {
                         TransferState::InProgress => {
-                            if status.txis().is_empty() {
+                            if self.i2c.isr().read().txis().is_empty() {
                                 break;
                             }
                         }
                         TransferState::LastByte => {
-                            if status.stopf().is_stop() || status.tc().is_complete() {
+                            if self.i2c.isr().read().stopf().is_stop()
+                                    || self.i2c.isr().read().tc().is_complete() {
                                 break;
                             }
                         }
                     }
-                    self.check_errors(&status, transfer_kind)?;
+                    self.check_errors(transfer_kind)?;
                 }
 
                 Ok(())
@@ -244,11 +238,20 @@ macro_rules! i2c {
 
             fn wait_for_rxne(&self, transfer_kind: i2c::NoAcknowledgeSource) -> Result<(), Error> {
                 loop {
-                    let status = self.i2c.isr().read();
-                    if status.rxne().is_not_empty() {
+                    if self.i2c.isr().read().rxne().is_not_empty() {
                         break;
                     }
-                    self.check_errors(&status, transfer_kind)?;
+                    self.check_errors(transfer_kind)?;
+
+                    if self.i2c.isr().read().stopf().is_stop() {
+                        // Recheck status register
+                        if self.i2c.isr().read().rxne().is_not_empty() {
+                            break;
+                        }
+
+                        self.i2c.icr().write(|w| w.stopcf().clear());
+                        return Err(Error::IncorrectFrameSize);
+                    }
                 }
 
                 Ok(())
@@ -274,21 +277,11 @@ macro_rules! i2c {
                 address: i2c::SevenBitAddress,
                 operations: &mut [i2c::Operation<'_>],
             ) -> Result<(), Self::Error> {
-                // Enable peripheral
-                // TODO: display writes happen in short chunks; do not disable I2C between them.
-                debug_assert!(self.i2c.cr1().read().pe().is_disabled());
-                self.i2c.cr1().modify(|_, w| w.pe().enabled());
-
-                // Disable peripheral when done
-                defer! {
-                    self.i2c.cr1().modify(|_, w| w.pe().disabled());
-                    while self.i2c.cr1().read().pe().is_enabled() {}
-                }
-
-                while self.i2c.cr2().read().start().is_start() {}
+                // Wait for bus to become free.
+                while self.i2c.isr().read().busy().is_busy() {}
 
                 // Set address
-                self.i2c.cr2().modify(|_, w| {
+                self.i2c.cr2().write(|w| {
                     w.add10()
                         .bit7()
                         .sadd()
@@ -374,7 +367,10 @@ macro_rules! i2c {
                     None => { /* empty operations list, do nothing */ }
                 }
 
+                while self.i2c.isr().read().stopf().is_no_stop() {}
                 self.i2c.icr().write(|w| w.stopcf().clear());
+
+                self.i2c.cr2().reset();
 
                 Ok(())
             }
