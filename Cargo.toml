@@ -13,7 +13,7 @@ embedded-hal = "1"
 fugit = "0.3"
 paste = "1"
 rtt-target = { version = "0.6", optional = true }
-bitfield = { version = "0.17", optional = true }
+bitfield = { version = "0.18", optional = true }
 usb-device = { version = "0.3", optional = true }
 vcell = { version = "0.1", optional = true }
 
