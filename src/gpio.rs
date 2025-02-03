@@ -217,19 +217,15 @@ macro_rules! gpio_common {
             #[allow(unsafe_code)]
             impl<MODE> embedded_hal::digital::OutputPin for $PXi<Output<MODE>> {
                 fn set_high(&mut self) -> Result<(), Self::Error> {
-                    unsafe {
-                        let rb =  &(*$GPIO::ptr());
-                        rb.bsrr().write(|w| w.[<bs $i>]().set_bit());
-                        Ok(())
-                    }
+                    let rb = unsafe { &(*$GPIO::ptr()) };
+                    rb.bsrr().write(|w| w.[<bs $i>]().set_());
+                    Ok(())
                 }
 
                 fn set_low(&mut self) -> Result<(), Self::Error> {
-                    unsafe {
-                        let rb =  &(*$GPIO::ptr());
-                        rb.bsrr().write(|w| w.[<br $i>]().set_bit());
-                        Ok(())
-                    }
+                    let rb = unsafe { &(*$GPIO::ptr()) };
+                    rb.bsrr().write(|w| w.[<br $i>]().reset());
+                    Ok(())
                 }
             }
 
