@@ -1,11 +1,11 @@
 #![allow(unused)]
 use core::marker::PhantomData;
 
+use crate::gpio::Alternate;
 use crate::gpio::gpioa::*;
 use crate::gpio::gpiob::*;
 use crate::gpio::gpioc::*;
 use crate::gpio::gpiod::*;
-use crate::gpio::Alternate;
 use crate::pac::{TIM2, TIM3};
 use crate::rcc::{Rcc, ResetEnable};
 

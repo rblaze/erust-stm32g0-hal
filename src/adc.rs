@@ -1,7 +1,7 @@
-use crate::gpio::gpiob::{PB0, PB1, PB10, PB2};
 use crate::gpio::Analog;
-use crate::pac::adc::chselr1;
+use crate::gpio::gpiob::{PB0, PB1, PB2, PB10};
 use crate::pac::ADC;
+use crate::pac::adc::chselr1;
 use crate::rcc::{Rcc, ResetEnable};
 
 pub trait AdcExt {
