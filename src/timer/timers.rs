@@ -96,7 +96,7 @@ macro_rules! general_purpose_timer {
         }
 
         impl Pwm<$TIM> {
-            pub fn bind_pin<PIN>(&self, pin: PIN) -> PwmPin<$TIM, PIN::Channel>
+            pub fn bind_pin<PIN>(&self, pin: PIN) -> PwmPin<'_, $TIM, PIN::Channel>
             where
                 PIN: TimerPin<$TIM>,
             {

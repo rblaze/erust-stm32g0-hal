@@ -35,7 +35,7 @@ impl<USB> Allocator<USB> {
     /// Allocates buffer. Returns the buffer offset or error.
     pub fn alloc(&mut self, num_bytes: usize) -> Result<usize> {
         // Precondition: buffers always start at 4-byte boundary.
-        debug_assert!(self.next_free_byte % 4 == 0);
+        debug_assert!(self.next_free_byte.is_multiple_of(4));
 
         if self.next_free_byte + num_bytes > self.total_bytes {
             return Err(UsbError::EndpointMemoryOverflow);
