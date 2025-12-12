@@ -1,4 +1,5 @@
 use embedded_hal::i2c;
+use thiserror::Error;
 
 use crate::gpio::gpioa::*;
 use crate::gpio::gpiob::*;
@@ -73,14 +74,19 @@ pub trait I2cExt<I2C> {
         SCL: SclPin<I2C>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Error)]
 #[non_exhaustive]
 /// I2C errors
 pub enum Error {
+    #[error("arbitration lost")]
     ArbitrationLost,
+    #[error("I2C bus error")]
     Bus,
+    #[error("incorrect frame size")]
     IncorrectFrameSize,
+    #[error("nack from {0}")]
     Nack(i2c::NoAcknowledgeSource),
+    #[error("buffer overrun")]
     Overrun,
 }
 

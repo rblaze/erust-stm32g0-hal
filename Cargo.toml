@@ -7,13 +7,14 @@ edition = "2024"
 stm32g0 = { git = "https://github.com/stm32-rs/stm32-rs-nightlies" }
 # stm32g0 = { path = "../stm32-rs/stm32g0" }
 
+bitfield = { version = "0.19", optional = true }
 cortex-m = "0.7"
 critical-section = "1"
 embedded-hal = "1"
 fugit = "0.3"
 paste = "1"
 rtt-target = { version = "0.6", optional = true }
-bitfield = { version = "0.19", optional = true }
+thiserror = "2"
 usb-device = { version = "0.3", optional = true }
 vcell = { version = "0.1", optional = true }
 
