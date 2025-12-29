@@ -84,7 +84,7 @@ pub enum Error {
     Bus,
     #[error("incorrect frame size")]
     IncorrectFrameSize,
-    #[error("nack from {0}")]
+    #[error("{0}")]
     Nack(i2c::NoAcknowledgeSource),
     #[error("buffer overrun")]
     Overrun,
@@ -314,6 +314,8 @@ macro_rules! i2c {
                                     .read()
                                     .reload()
                                     .bit(next_op_is_same)
+                                    .autoend()
+                                    .software()
                                     .nbytes()
                                     .set(rdbuf.len() as u8)
                                     .start()
@@ -329,6 +331,8 @@ macro_rules! i2c {
                                     .write()
                                     .reload()
                                     .bit(next_op_is_same)
+                                    .autoend()
+                                    .software()
                                     .nbytes()
                                     .set(wrbuf.len() as u8)
                                     .start()
