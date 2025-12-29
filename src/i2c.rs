@@ -1,4 +1,5 @@
 use embedded_hal::i2c;
+use scopeguard::defer;
 use thiserror::Error;
 
 use crate::gpio::gpioa::*;
@@ -286,6 +287,13 @@ macro_rules! i2c {
                 // Wait for bus to become free.
                 while self.i2c.isr().read().busy().is_busy() {}
 
+                // Always clear stop condition and reset CR2 on exit, error or not.
+                defer! {
+                    self.i2c.cr2().reset();
+                    while self.i2c.isr().read().busy().is_busy() {}
+                    self.i2c.icr().write(|w| w.stopcf().clear());
+                }
+
                 // Set address
                 self.i2c.cr2().write(|w| {
                     w.add10()
@@ -378,9 +386,6 @@ macro_rules! i2c {
                 }
 
                 while self.i2c.isr().read().stopf().is_no_stop() {}
-                self.i2c.icr().write(|w| w.stopcf().clear());
-
-                self.i2c.cr2().reset();
 
                 Ok(())
             }
