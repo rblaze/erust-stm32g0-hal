@@ -59,7 +59,6 @@ pub trait ResetEnable {
 #[derive(Debug)]
 pub struct Rcc {
     rcc: RCC,
-    #[allow(unused)]
     sysclk: KilohertzU32,
 }
 
@@ -76,5 +75,10 @@ impl Rcc {
     #[cfg(feature = "stm32g0b1")]
     pub fn disable_hsi48(&self) {
         self.rcc.cr().modify(|_, w| w.hsi48on().disabled());
+    }
+
+    /// Get system clock frequency.
+    pub fn sysclk(&self) -> KilohertzU32 {
+        self.sysclk
     }
 }
