@@ -5,6 +5,7 @@ pub mod adc;
 pub mod exti;
 pub mod gpio;
 pub mod i2c;
+pub mod iwdg;
 pub mod pwr;
 pub mod rcc;
 pub mod timer;
