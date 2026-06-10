@@ -5,7 +5,7 @@ use crate::pac::{
 };
 
 #[cfg(feature = "stm32g0b1")]
-use crate::pac::{GPIOE, I2C3, TIM4, USB, USART5, USART6};
+use crate::pac::{GPIOE, I2C3, TIM4, USART5, USART6, USB};
 
 use super::{Rcc, ResetEnable};
 
