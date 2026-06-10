@@ -1,0 +1,6 @@
+{
+    // "rust-analyzer.cargo.target": "thumbv6m-none-eabi",
+    "rust-analyzer.cargo.extraArgs": [
+        "--features=stm32g071"
+    ]
+}
