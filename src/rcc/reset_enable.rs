@@ -1,10 +1,11 @@
 use crate::pac::rcc::{AHBENR, AHBRSTR, APBENR1, APBENR2, APBRSTR1, APBRSTR2, IOPENR, IOPRSTR};
 use crate::pac::{
     ADC, DMA1, GPIOA, GPIOB, GPIOC, GPIOD, GPIOF, I2C1, I2C2, LPTIM1, LPTIM2, TIM1, TIM2, TIM3,
+    USART1, USART2, USART3, USART4,
 };
 
 #[cfg(feature = "stm32g0b1")]
-use crate::pac::{GPIOE, I2C3, TIM4, USB};
+use crate::pac::{GPIOE, I2C3, TIM4, USB, USART5, USART6};
 
 use super::{Rcc, ResetEnable};
 
@@ -62,7 +63,14 @@ reset_enable!(TIM3, APB1, tim3en, tim3rst); // 1
 #[cfg(feature = "stm32g0b1")]
 reset_enable!(TIM4, APB1, tim4en, tim4rst); // 2
 #[cfg(feature = "stm32g0b1")]
+reset_enable!(USART5, APB1, usart5en, usart5rst); // 8
+#[cfg(feature = "stm32g0b1")]
+reset_enable!(USART6, APB1, usart6en, usart6rst); // 9
+#[cfg(feature = "stm32g0b1")]
 reset_enable!(USB, APB1, usben, usbrst); // 13
+reset_enable!(USART2, APB1, usart2en, usart2rst); // 17
+reset_enable!(USART3, APB1, usart3en, usart3rst); // 18
+reset_enable!(USART4, APB1, usart4en, usart4rst); // 19
 reset_enable!(I2C1, APB1, i2c1en, i2c1rst); // 21
 reset_enable!(I2C2, APB1, i2c2en, i2c2rst); // 22
 #[cfg(feature = "stm32g0b1")]
@@ -72,6 +80,7 @@ reset_enable!(LPTIM1, APB1, lptim1en, lptim1rst); // 31
 
 // APB2 devices
 reset_enable!(TIM1, APB2, tim1en, tim1rst); // 11
+reset_enable!(USART1, APB2, usart1en, usart1rst); // 14
 reset_enable!(ADC, APB2, adcen, adcrst); // 20
 
 // GPIO devices

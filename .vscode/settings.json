@@ -2,5 +2,10 @@
     // "rust-analyzer.cargo.target": "thumbv6m-none-eabi",
     "rust-analyzer.cargo.extraArgs": [
         "--features=stm32g071"
+    ],
+    "rust-analyzer.cargo.cfgs": [
+        "debug_assertions",
+        "miri",
+        "feature=stm32g071"
     ]
 }
