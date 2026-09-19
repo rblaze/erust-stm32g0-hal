@@ -1,7 +1,7 @@
 use crate::pac::rcc::{AHBENR, AHBRSTR, APBENR1, APBENR2, APBRSTR1, APBRSTR2, IOPENR, IOPRSTR};
 use crate::pac::{
     ADC, DMA1, GPIOA, GPIOB, GPIOC, GPIOD, GPIOF, I2C1, I2C2, LPTIM1, LPTIM2, TIM1, TIM2, TIM3,
-    USART1, USART2, USART3, USART4,
+    TIM6, TIM7, USART1, USART2, USART3, USART4,
 };
 
 #[cfg(feature = "stm32g0b1")]
@@ -62,6 +62,8 @@ reset_enable!(TIM2, APB1, tim2en, tim2rst); // 0
 reset_enable!(TIM3, APB1, tim3en, tim3rst); // 1
 #[cfg(feature = "stm32g0b1")]
 reset_enable!(TIM4, APB1, tim4en, tim4rst); // 2
+reset_enable!(TIM6, APB1, tim6en, tim6rst); // 4
+reset_enable!(TIM7, APB1, tim7en, tim7rst); // 5
 #[cfg(feature = "stm32g0b1")]
 reset_enable!(USART5, APB1, usart5en, usart5rst); // 8
 #[cfg(feature = "stm32g0b1")]

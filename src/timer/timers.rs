@@ -6,7 +6,7 @@ use crate::gpio::gpioa::*;
 use crate::gpio::gpiob::*;
 use crate::gpio::gpioc::*;
 use crate::gpio::gpiod::*;
-use crate::pac::{TIM2, TIM3};
+use crate::pac::{TIM2, TIM3, TIM6, TIM7};
 use crate::rcc::{Rcc, ResetEnable};
 
 #[cfg(feature = "stm32g0b1")]
@@ -38,7 +38,7 @@ pub struct Pwm<TIM> {
     timer: TIM,
 }
 
-macro_rules! general_purpose_timer {
+macro_rules! basic_timer {
     ($TIM:ident, $REG:tt) => {
         impl TimerExt for $TIM {
             fn constrain(self) -> Timer<Self> {
@@ -58,7 +58,32 @@ macro_rules! general_purpose_timer {
 
                 Counter { timer: self.timer }
             }
+        }
 
+        impl Counter<$TIM> {
+            pub fn start(&self) {
+                self.timer.cr1().modify(|_, w| w.cen().set_bit());
+            }
+
+            pub fn stop(&self) {
+                self.timer.cr1().modify(|_, w| w.cen().clear_bit());
+            }
+
+            pub fn counter(&self) -> $REG {
+                return self.timer.cnt().read().cnt().bits();
+            }
+        }
+    };
+}
+
+basic_timer!(TIM6, u16);
+basic_timer!(TIM7, u16);
+
+macro_rules! general_purpose_timer {
+    ($TIM:ident, $REG:tt) => {
+        basic_timer!($TIM, $REG);
+
+        impl Timer<$TIM> {
             pub fn pwm(self, prescaler: u16, limit: $REG, rcc: &Rcc) -> Pwm<$TIM> {
                 $TIM::enable(rcc);
                 $TIM::reset(rcc);
@@ -78,20 +103,6 @@ macro_rules! general_purpose_timer {
                 self.timer.cr1().modify(|_, w| w.cen().set_bit());
 
                 Pwm { timer: self.timer }
-            }
-        }
-
-        impl Counter<$TIM> {
-            pub fn start(&self) {
-                self.timer.cr1().modify(|_, w| w.cen().set_bit());
-            }
-
-            pub fn stop(&self) {
-                self.timer.cr1().modify(|_, w| w.cen().clear_bit());
-            }
-
-            pub fn counter(&self) -> $REG {
-                return self.timer.cnt().read().cnt().bits();
             }
         }
 
