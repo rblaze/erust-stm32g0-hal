@@ -32,13 +32,18 @@ pub struct Counter<TIM> {
     timer: TIM,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BasicTimEvent {
+    Update,
+}
+
 /// PWM timer
 #[derive(Debug)]
 pub struct Pwm<TIM> {
     timer: TIM,
 }
 
-macro_rules! basic_timer {
+macro_rules! common_timer {
     ($TIM:ident, $REG:tt) => {
         impl TimerExt for $TIM {
             fn constrain(self) -> Timer<Self> {
@@ -76,12 +81,38 @@ macro_rules! basic_timer {
     };
 }
 
+macro_rules! basic_timer {
+    ($TIM:ident, $REG:tt) => {
+        common_timer!($TIM, $REG);
+
+        impl Counter<$TIM> {
+            pub fn listen(&self, event: BasicTimEvent) {
+                match event {
+                    BasicTimEvent::Update => self.timer.dier().modify(|_, w| w.uie().enabled()),
+                };
+            }
+
+            pub fn unlisten(&self, event: BasicTimEvent) {
+                match event {
+                    BasicTimEvent::Update => self.timer.dier().modify(|_, w| w.uie().disabled()),
+                };
+            }
+
+            pub fn clear_interrupt_pending_bit(&self, event: BasicTimEvent) {
+                match event {
+                    BasicTimEvent::Update => self.timer.sr().modify(|_, w| w.uif().clear_bit()),
+                };
+            }
+        }
+    };
+}
+
 basic_timer!(TIM6, u16);
 basic_timer!(TIM7, u16);
 
 macro_rules! general_purpose_timer {
     ($TIM:ident, $REG:tt) => {
-        basic_timer!($TIM, $REG);
+        common_timer!($TIM, $REG);
 
         impl Timer<$TIM> {
             pub fn pwm(self, prescaler: u16, limit: $REG, rcc: &Rcc) -> Pwm<$TIM> {
