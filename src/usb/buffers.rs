@@ -118,11 +118,10 @@ impl<USB> TxBuffer<USB> {
         }
 
         let mut index = 0;
-        let chunks = data.chunks_exact(WORD_SIZE);
-        let remainder = chunks.remainder();
+        let (chunks, remainder) = data.as_chunks::<WORD_SIZE>();
 
         for chunk in chunks {
-            let word = u32::from_ne_bytes(chunk.try_into().unwrap());
+            let word = u32::from_ne_bytes(*chunk);
             self.mem[index].set(word);
             index += 1;
         }
