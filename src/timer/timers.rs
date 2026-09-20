@@ -98,9 +98,15 @@ macro_rules! basic_timer {
                 };
             }
 
-            pub fn clear_interrupt_pending_bit(&self, event: BasicTimEvent) {
+            pub fn is_pending(&self, event: BasicTimEvent) -> bool {
                 match event {
-                    BasicTimEvent::Update => self.timer.sr().modify(|_, w| w.uif().clear_bit()),
+                    BasicTimEvent::Update => self.timer.sr().read().uif().is_update_pending(),
+                }
+            }
+
+            pub fn unpend(&self, event: BasicTimEvent) {
+                match event {
+                    BasicTimEvent::Update => self.timer.sr().modify(|_, w| w.uif().clear()),
                 };
             }
         }
