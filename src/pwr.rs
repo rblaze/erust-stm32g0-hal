@@ -9,6 +9,7 @@ impl PwrExt for crate::pac::PWR {
 }
 
 /// Constrained PWR device
+#[derive(Debug)]
 pub struct Pwr {
     #[allow(unused)]
     pwr: crate::pac::PWR,

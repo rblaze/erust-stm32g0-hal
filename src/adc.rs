@@ -8,6 +8,7 @@ pub trait AdcExt {
     fn constrain(self, rcc: &Rcc) -> Adc;
 }
 
+#[derive(Debug)]
 pub struct Adc {
     adc: ADC,
     vref_cache: Option<u16>,
@@ -124,6 +125,7 @@ impl Adc {
     }
 }
 
+#[derive(Debug)]
 pub struct VRef;
 
 pub trait AdcPin {

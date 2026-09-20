@@ -52,6 +52,7 @@ impl UsbExt for crate::pac::USB {
 }
 
 /// Constrained USB device
+#[derive(Debug)]
 pub struct Bus<USB>(Mutex<BusData<USB>>);
 
 impl Bus<crate::pac::USB> {
@@ -200,6 +201,7 @@ impl UsbBus for Bus<crate::pac::USB> {
     }
 }
 
+#[derive(Debug)]
 struct BusData<USB> {
     usb: USB,
     endpoints: [Endpoint<USB>; MAX_ENDPOINTS],

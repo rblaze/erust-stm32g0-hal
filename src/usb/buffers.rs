@@ -13,6 +13,7 @@ const WORD_SIZE: usize = core::mem::size_of::<u32>();
 const BTABLE_ENTRY_SIZE: usize = core::mem::size_of::<TxEntry>() + core::mem::size_of::<RxEntry>();
 
 /// USB rx/tx buffer allocator
+#[derive(Debug)]
 pub(super) struct Allocator<USB> {
     /// Total available memory
     total_bytes: usize,

@@ -1,6 +1,6 @@
 use crate::pac::IWDG;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IwdgPrescaler {
     Div4 = 0b000,
     Div8 = 0b001,

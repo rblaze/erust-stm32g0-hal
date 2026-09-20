@@ -27,37 +27,47 @@ pub enum SignalEdge {
 }
 
 /// Input mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Input<MODE> {
     _mode: PhantomData<MODE>,
 }
 
 /// Floating input
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Floating;
 
 /// Pulled down input
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PullDown;
 
 /// Pulled up input
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PullUp;
 
 /// Output mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Output<MODE> {
     _mode: PhantomData<MODE>,
 }
 
 /// Open drain input or output
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OpenDrain;
 
 /// Push pull output
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PushPull;
 
 /// Analog mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Analog;
 
 /// Alternate function mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Alternate<const N: u8>;
 
 /// Alternate function numbers
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum AltFunction {
     AF0 = 0,
     AF1 = 1,
@@ -126,6 +136,7 @@ macro_rules! gpio_common {
             }
         }
 
+        #[derive(Debug)]
         pub struct Parts {
             $(
                 pub [<$PXi:lower>]: $PXi<$default_mode>,
@@ -133,6 +144,7 @@ macro_rules! gpio_common {
         }
 
         $(
+            #[derive(Debug)]
             pub struct $PXi<MODE> {
                 _mode: PhantomData<MODE>,
             }

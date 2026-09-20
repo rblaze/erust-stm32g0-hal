@@ -103,7 +103,7 @@ impl i2c::Error for Error {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum TransferState {
     InProgress,
     LastByte,

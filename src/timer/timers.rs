@@ -159,9 +159,17 @@ general_purpose_timer!(TIM3, u16);
 #[cfg(feature = "stm32g0b1")]
 general_purpose_timer!(TIM4, u16);
 
+// Type tags for the timer channel 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Channel1;
+// Type tags for the timer channel 2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Channel2;
+// Type tags for the timer channel 3.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Channel3;
+// Type tags for the timer channel 4.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Channel4;
 
 pub trait TimerPin<TIM> {
